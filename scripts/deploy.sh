@@ -52,4 +52,8 @@ git tag "v$new_version"
 git push && git push --tags
 
 echo ""
+echo "==> Publishing to crates.io..."
+cargo publish
+
+echo ""
 echo "==> Released v$new_version"
