@@ -1,7 +1,10 @@
 [package]
 name = "ghpascon-rust"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
+description = "A personal Rust utility library"
+license = "MIT"
+repository = "https://github.com/ghpascon/ghpascon-rust"
 
 [dependencies]
 regex = "1"
