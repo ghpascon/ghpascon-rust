@@ -6,8 +6,8 @@
 use ghpascon_rust::utils::regex::regex_hex;
 
 fn main() {
-    println!("{}", regex_hex("1a2b3c", None)); // true
-    println!("{}", regex_hex("1a2b3c", Some(6))); // true
-    println!("{}", regex_hex("1a2b3c", Some(5))); // false  (wrong length)
-    println!("{}", regex_hex("1a2b3g", None)); // false  (invalid char)
+    println!("{}", regex_hex("1a2b3c")); // true
+    println!("{}", regex_hex("1A2B3C")); // true
+    println!("{}", regex_hex("1a2b3c")); // true
+    println!("{}", regex_hex("1a2b3g")); // false  (invalid char)
 }
