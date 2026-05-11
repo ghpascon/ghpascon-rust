@@ -1,0 +1,11 @@
+[package]
+name = "ghpascon-rust"
+version = "0.2.0"
+edition = "2024"
+
+[dependencies]
+regex = "1"
+
+[[example]]
+name = "utils_regex"
+path = "examples/utils/regex.rs"
