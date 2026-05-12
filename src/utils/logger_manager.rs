@@ -3,8 +3,12 @@ use serde::Serialize;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, OnceLock, Weak};
 use tokio::{fs, time};
+
+// ── Global instance ───────────────────────────────────────────────────────────
+
+static GLOBAL: OnceLock<Arc<LoggerManager>> = OnceLock::new();
 
 /// Log severity levels in increasing priority order.
 ///
@@ -227,7 +231,26 @@ impl LoggerManager {
         }
     }
 
-    // ── Public logging API ────────────────────────────────────────────────────
+    // ── Global logger ─────────────────────────────────────────────────────────
+
+    /// Registers this `LoggerManager` as the process-wide global instance.
+    ///
+    /// After calling this, the `println!`, `eprintln!`, `print!`, and `eprint!`
+    /// macros exported by this crate will route their output here as `DEBUG`
+    /// entries instead of writing to stdout/stderr.
+    ///
+    /// Can only be set once; subsequent calls are silently ignored.
+    pub fn set_as_global(self: &Arc<Self>) {
+        let _ = GLOBAL.set(Arc::clone(self));
+    }
+
+    /// Returns the global `LoggerManager`, if one has been registered via
+    /// [`set_as_global`](Self::set_as_global).
+    pub fn global() -> Option<Arc<LoggerManager>> {
+        GLOBAL.get().cloned()
+    }
+
+    // Public logging API
 
     /// Internal method used by the `lgr_*!` macros for full call-site metadata.
     #[doc(hidden)]
@@ -424,6 +447,86 @@ macro_rules! lgr_error {
             $crate::utils::logger_manager::LogLevel::Error,
             format!($($arg)*), module_path!(), file!(), line!(),
         )
+    };
+}
+
+// ── println! / eprintln! / print! / eprint! overrides ────────────────────────
+//
+// Import these to redirect your prints to the global logger as DEBUG entries:
+//
+//   use ghpascon_rust::{println, eprintln};   // shadows the std macros
+//
+// If no global logger is set the output falls back to the standard streams.
+
+/// Like `println!` but routes to the global [`LoggerManager`] at DEBUG level.
+/// Falls back to `std::println!` when no global logger is registered.
+#[macro_export]
+macro_rules! println {
+    () => {
+        match $crate::utils::logger_manager::LoggerManager::global() {
+            Some(lgr) => lgr.debug(""),
+            None => ::std::println!(),
+        }
+    };
+    ($($arg:tt)*) => {
+        match $crate::utils::logger_manager::LoggerManager::global() {
+            Some(lgr) => lgr.debug(::std::format!($($arg)*)),
+            None => ::std::println!($($arg)*),
+        }
+    };
+}
+
+/// Like `eprintln!` but routes to the global [`LoggerManager`] at DEBUG level.
+/// Falls back to `std::eprintln!` when no global logger is registered.
+#[macro_export]
+macro_rules! eprintln {
+    () => {
+        match $crate::utils::logger_manager::LoggerManager::global() {
+            Some(lgr) => lgr.debug(""),
+            None => ::std::eprintln!(),
+        }
+    };
+    ($($arg:tt)*) => {
+        match $crate::utils::logger_manager::LoggerManager::global() {
+            Some(lgr) => lgr.debug(::std::format!($($arg)*)),
+            None => ::std::eprintln!($($arg)*),
+        }
+    };
+}
+
+/// Like `print!` but routes to the global [`LoggerManager`] at DEBUG level.
+/// Falls back to `std::print!` when no global logger is registered.
+#[macro_export]
+macro_rules! print {
+    () => {
+        match $crate::utils::logger_manager::LoggerManager::global() {
+            Some(lgr) => lgr.debug(""),
+            None => ::std::print!(),
+        }
+    };
+    ($($arg:tt)*) => {
+        match $crate::utils::logger_manager::LoggerManager::global() {
+            Some(lgr) => lgr.debug(::std::format!($($arg)*)),
+            None => ::std::print!($($arg)*),
+        }
+    };
+}
+
+/// Like `eprint!` but routes to the global [`LoggerManager`] at DEBUG level.
+/// Falls back to `std::eprint!` when no global logger is registered.
+#[macro_export]
+macro_rules! eprint {
+    () => {
+        match $crate::utils::logger_manager::LoggerManager::global() {
+            Some(lgr) => lgr.debug(""),
+            None => ::std::eprint!(),
+        }
+    };
+    ($($arg:tt)*) => {
+        match $crate::utils::logger_manager::LoggerManager::global() {
+            Some(lgr) => lgr.debug(::std::format!($($arg)*)),
+            None => ::std::eprint!($($arg)*),
+        }
     };
 }
 

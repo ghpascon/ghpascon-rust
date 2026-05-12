@@ -253,6 +253,212 @@ async fn main() {
 }
 ```
 
+---
+
+### `devices::rfid::r700`
+
+Impinj R700 IOT RFID reader driver over HTTPS REST API with automatic reconnection.
+Same `Arc<R700Shared>` architecture as X714 — `R700: Clone` is cheap.
+
+The R700 exposes a REST API over HTTPS (self-signed certificate).
+Tags are delivered as an NDJSON stream via `GET /data/stream`.
+
+#### Architecture
+
+| State field     | Type                    | Description                             |
+| --------------- | ----------------------- | --------------------------------------- |
+| `is_connected`  | `AtomicBool`            | Set after full setup sequence succeeds  |
+| `is_reading`    | `AtomicBool`            | Set when `inventoryStatus == "running"` |
+| `serial_number` | `Mutex<Option<String>>` | From `GET /system`                      |
+| `running`       | `AtomicBool`            | Set to `false` by `close()`             |
+
+#### Reconnection loop (mirrors Python `connect()`)
+
+1. `PUT /system/rfid/interface` → `{"rfidInterface":"rest"}`
+2. `GET /system/image` → firmware version check (if configured)
+3. `GET /status` → `POST /profiles/stop` (if not idle)
+4. `GET /system` → extract `serialNumber`, dispatch `SerialNumber` event
+5. `POST /profiles/inventory/start` → full reading config
+6. Dispatch `Connection(true)` event
+7. Stream `GET /data/stream` (NDJSON): parse `tagInventoryEvent` + `inventoryStatusEvent`
+8. On disconnect: dispatch `Connection(false)`, sleep `reconnection_time`, retry
+
+#### R700Config fields
+
+| Field                          | Default           | Description                                     |
+| ------------------------------ | ----------------- | ----------------------------------------------- |
+| `name`                         | `"r700"`          | Device name (appears in event dispatch)         |
+| `ip`                           | `"192.168.1.100"` | Reader IP address                               |
+| `username`                     | `"root"`          | Basic Auth username                             |
+| `password`                     | `"impinj"`        | Basic Auth password                             |
+| `start_reading`                | `true`            | Start inventory on connect                      |
+| `firmware_version`             | `None`            | Required firmware prefix (skip check if `None`) |
+| `session`                      | `1`               | RFID session (0–3)                              |
+| `read_power`                   | `3000`            | Transmit power in cdbm                          |
+| `read_rssi`                    | `-80`             | Minimum RSSI in dBm                             |
+| `search_mode`                  | `"dual-target"`   | Inventory search mode                           |
+| `rf_mode`                      | `4`               | RF mode index                                   |
+| `gpi_start`                    | `false`           | Use GPI triggers                                |
+| `protected_inventory_active`   | `false`           | Enable protected inventory                      |
+| `protected_inventory_password` | `"12345678"`      | Pin hex for protected inventory                 |
+| `reconnection_time`            | `2`               | Seconds between reconnection attempts           |
+| `active_ant`                   | `[1]`             | Active antenna ports                            |
+
+#### R700Event variants
+
+| Variant                | Payload         | Description                                |
+| ---------------------- | --------------- | ------------------------------------------ |
+| `Connection(bool)`     | `Value::Bool`   | `true` = connected, `false` = disconnected |
+| `Reading(bool)`        | `Value::Bool`   | Inventory start/stop                       |
+| `Tag(R700Tag)`         | `Value::Object` | New tag reading                            |
+| `SerialNumber(String)` | `Value::String` | Reader serial number                       |
+
+#### R700Tag fields
+
+`epc: Option<String>` · `tid: Option<String>` · `ant: i32` · `rssi: i32` · `protected: bool`
+
+#### Main API
+
+| Method                                                 | Description                                         |
+| ------------------------------------------------------ | --------------------------------------------------- |
+| `R700::new(config)`                                    | Create from `R700Config`                            |
+| `R700::from_map(params)`                               | Create from `HashMap<String, Value>`                |
+| `with_event_handler(h)` / `set_event_handler(&mut, h)` | Replace event sink                                  |
+| `connect().await`                                      | Run reconnection loop forever (spawn as background) |
+| `close().await`                                        | Stop loop and clear runtime state                   |
+| `start_inventory().await`                              | `POST /profiles/inventory/start`                    |
+| `stop_inventory().await`                               | `POST /profiles/stop`                               |
+| `write_gpo(pin, state, control, time_ms).await`        | Control GPO pin                                     |
+| `write_epc(target_id, target_val, new_epc, pw).await`  | Write new EPC (3 blockWrite commands)               |
+| `protected_inventory(&mut, active, pw).await`          | Enable/disable protected inventory                  |
+| `is_connected() / is_reading()`                        | Runtime state accessors                             |
+| `serial_number()`                                      | `Option<String>`                                    |
+| `to_map()`                                             | Export config to map                                |
+| `connect_instruction()`                                | Human-readable connection string                    |
+
+```rust
+use std::collections::HashMap;
+use ghpascon_rust::devices::rfid::r700::R700;
+use serde_json::{Number, Value};
+
+#[tokio::main]
+async fn main() {
+    let mut params = HashMap::new();
+    params.insert("name".to_string(), Value::String("dock-r700".to_string()));
+    params.insert("ip".to_string(), Value::String("192.168.1.101".to_string()));
+    params.insert("start_reading".to_string(), Value::Bool(true));
+    params.insert(
+        "active_ant".to_string(),
+        Value::Array(vec![Value::Number(Number::from(1))]),
+    );
+
+    let reader = R700::from_map(params).expect("valid config");
+    println!("{}", reader.connect_instruction());
+
+    // connect() runs forever – always spawn it as a background task
+    let bg = reader.clone();
+    tokio::spawn(async move { bg.connect().await; });
+
+    tokio::signal::ctrl_c().await.ok();
+    reader.stop_inventory().await.ok();
+    reader.close().await;
+}
+```
+
+---
+
+### `devices::device_manager`
+
+Gerencia múltiplos dispositivos RFID (X714, R700) a partir de arquivos `.json`.
+Inspirado na classe Python `DeviceManager`.
+
+#### Formato do arquivo `.json`
+
+O campo `"reader"` define o tipo do device. Todos os demais campos são opcionais — os padrões de cada device são aplicados automaticamente. O nome do arquivo (sem `.json`) vira o `name` do device.
+
+| Tipo        | Campo `"reader"` |
+| ----------- | ---------------- |
+| X714        | `"X714"`         |
+| Impinj R700 | `"R700_IOT"`     |
+
+```json
+{ "reader": "X714", "connection_type": "TCP", "ip": "192.168.1.50" }
+{ "reader": "R700_IOT", "ip": "192.168.1.101", "active_ant": [1, 2] }
+{ "reader": "X714", "connection_type": "SERIAL", "vid": 1, "pid": 1 }
+```
+
+#### DeviceInfo
+
+| Campo                 | Tipo             | Descrição                        |
+| --------------------- | ---------------- | -------------------------------- |
+| `name`                | `String`         | Nome do device (nome do arquivo) |
+| `device_type`         | `String`         | `"X714"` ou `"R700_IOT"`         |
+| `is_connected`        | `bool`           | Estado de conexão                |
+| `is_reading`          | `bool`           | Estado de leitura                |
+| `serial_number`       | `Option<String>` | Serial number (se disponível)    |
+| `connect_instruction` | `String`         | String de conexão legível        |
+
+#### API do DeviceManager
+
+| Método                                                   | Descrição                                                  |
+| -------------------------------------------------------- | ---------------------------------------------------------- |
+| `DeviceManager::new(path)`                               | Cria manager apontando para o diretório de configs         |
+| `with_event_handler(h)` / `set_event_handler(h)`         | Define handler de eventos compartilhado                    |
+| `assign_event_handler()`                                 | Distribui o handler a todos os devices carregados          |
+| `load_devices()`                                         | Lê JSONs e popula `devices` (chama `assign_event_handler`) |
+| `connect_devices(force).await`                           | Spawn tasks de conexão em background; `force` reinicia     |
+| `cancel_connect_tasks().await`                           | Cancela tasks de conexão ativas                            |
+| `disconnect_devices().await`                             | Fecha todos e limpa a lista                                |
+| `get_device_names() -> Vec<String>`                      | Nomes de todos os devices                                  |
+| `get_device(name) -> Option<&Device>`                    | Referência a um device pelo nome                           |
+| `get_device_info(name: Option<&str>) -> Vec<DeviceInfo>` | Snapshot de estado de um ou todos                          |
+| `any_device_reading() -> bool`                           | `true` se algum device está conectado e lendo              |
+| `get_serial_number(name) -> Option<String>`              | Serial number do device (se conectado)                     |
+| `start_inventory(name).await`                            | Inicia inventário em um device                             |
+| `stop_inventory(name).await`                             | Para inventário em um device                               |
+| `start_inventory_all().await -> HashMap<String, bool>`   | Inicia em todos os conectados                              |
+| `stop_inventory_all().await -> HashMap<String, bool>`    | Para em todos os conectados                                |
+| `write_epc(name, tid, val, epc, pw).await`               | Escreve EPC em uma tag                                     |
+| `write_gpo(name, pin, state, ctrl, ms).await`            | Controla pino GPO                                          |
+| `len() / is_empty()`                                     | Contagem de devices                                        |
+
+```rust
+use std::sync::{Arc, Mutex};
+use ghpascon_rust::device_manager::{DeviceManager, SharedEventHandler};
+use ghpascon_rust::utils::tag_list::{TagList, make_tag};
+use serde_json::Value;
+
+#[tokio::main]
+async fn main() {
+    let tags = Arc::new(TagList::builder().build());
+    let tags_clone = Arc::clone(&tags);
+
+    let handler: SharedEventHandler = Arc::new(Mutex::new(Box::new(
+        move |name: &str, event_type: &str, data: Option<Value>| {
+            if event_type == "tag" {
+                if let Some(obj) = data.as_ref().and_then(|v| v.as_object()) {
+                    let epc = obj.get("epc").and_then(|v| v.as_str()).unwrap_or_default();
+                    let tid = obj.get("tid").and_then(|v| v.as_str());
+                    let rssi = obj.get("rssi").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let ant  = obj.get("ant").and_then(|v| v.as_u64()).unwrap_or(0);
+                    tags_clone.add(make_tag(epc, tid, rssi, ant), name);
+                }
+            }
+        },
+    )));
+
+    let mut manager = DeviceManager::new("examples/devices/configs")
+        .with_event_handler(handler);
+
+    manager.connect_devices(false).await;
+    println!("Devices: {:?}", manager.get_device_names());
+
+    tokio::signal::ctrl_c().await.ok();
+    manager.cancel_connect_tasks().await;
+    manager.disconnect_devices().await;
+}
+```
+
 ## Examples
 
 ```bash
@@ -263,7 +469,20 @@ cargo run --example example_tag_list
 cargo run --example x714_basic
 cargo run --example x714_custom_event
 cargo run --example x714_from_map
+cargo run --example r700_basic -- 192.168.1.101
+cargo run --example r700_custom_event -- 192.168.1.101
+cargo run --example device_manager_example
 ```
+
+## Device config examples
+
+Os arquivos em `examples/devices/configs/` mostram o formato mínimo de cada tipo:
+
+| Arquivo            | Tipo     | Transporte                   |
+| ------------------ | -------- | ---------------------------- |
+| `dock_x714.json`   | X714     | TCP                          |
+| `serial_x714.json` | X714     | Serial (VID/PID auto-detect) |
+| `dock_r700.json`   | R700 IOT | HTTPS REST                   |
 
 ## Scripts
 
@@ -273,16 +492,19 @@ cargo run --example x714_from_map
 
 ## Dependencies
 
-| Crate        | Purpose                            |
-| ------------ | ---------------------------------- |
-| `regex`      | Hex validation                     |
-| `dashmap`    | Concurrent hash maps (TagList)     |
-| `tokio`      | Async runtime (LoggerManager)      |
-| `sha2`       | SHA-256 hashing                    |
-| `hex`        | Hex encoding/decoding              |
-| `chrono`     | Timestamps (serde feature enabled) |
-| `serde`      | Serialisation/deserialisation      |
-| `serde_json` | JSON output                        |
+| Crate          | Purpose                                       |
+| -------------- | --------------------------------------------- |
+| `regex`        | Hex validation                                |
+| `dashmap`      | Concurrent hash maps (TagList)                |
+| `tokio`        | Async runtime                                 |
+| `sha2`         | SHA-256 hashing                               |
+| `hex`          | Hex encoding/decoding                         |
+| `chrono`       | Timestamps (serde feature enabled)            |
+| `serde`        | Serialisation/deserialisation                 |
+| `serde_json`   | JSON output                                   |
+| `serialport`   | Serial port enumeration (X714 VID/PID detect) |
+| `tokio-serial` | Async serial I/O (X714)                       |
+| `reqwest`      | HTTPS REST client with stream support (R700)  |
 
 ## License
 

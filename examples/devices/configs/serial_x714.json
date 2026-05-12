@@ -1,0 +1,10 @@
+{
+    "reader": "X714",
+    "connection_type": "SERIAL",
+    "start_reading": true,
+    "active_ant": [
+        1
+    ],
+    "session": 0,
+    "read_power": 22
+}

@@ -1,6 +1,6 @@
 [package]
 name = "ghpascon-rust"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 description = "A personal Rust utility library"
 license = "MIT"
@@ -17,6 +17,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serialport = "4"
 tokio-serial = "5"
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"] }
 
 [dev-dependencies]
 tempfile = "3"
@@ -49,3 +50,15 @@ path = "examples/devices/rfid/x714/custom_event.rs"
 [[example]]
 name = "x714_from_map"
 path = "examples/devices/rfid/x714/from_map.rs"
+
+[[example]]
+name = "r700_basic"
+path = "examples/devices/rfid/r700/basic.rs"
+
+[[example]]
+name = "r700_custom_event"
+path = "examples/devices/rfid/r700/custom_event.rs"
+
+[[example]]
+name = "device_manager_example"
+path = "examples/devices/device_manager_example.rs"

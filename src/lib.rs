@@ -1,4 +1,5 @@
 pub mod devices;
+pub use devices::device_manager;
 
 pub mod utils {
     pub mod dummy_event;

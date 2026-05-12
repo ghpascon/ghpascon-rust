@@ -39,21 +39,22 @@ impl X714 {
                     let monitor_self = self.clone();
                     let ping_self = self.clone();
 
-                    let recv_task = tokio::spawn(async move {
+                    let mut recv_task = tokio::spawn(async move {
                         recv_self.tcp_receive_loop(read_half).await;
                     });
-                    let monitor_task = tokio::spawn(async move {
+                    let mut monitor_task = tokio::spawn(async move {
                         monitor_self.tcp_monitor_loop().await;
                     });
-                    let ping_task = tokio::spawn(async move {
+                    let mut ping_task = tokio::spawn(async move {
                         ping_self.tcp_ping_loop(10).await;
                     });
 
-                    // Wait until the first task finishes (connection dropped)
+                    // Wait until the first task finishes (connection dropped), then
+                    // abort the remaining ones to avoid leaking background tasks.
                     tokio::select! {
-                        _ = recv_task    => {},
-                        _ = monitor_task => {},
-                        _ = ping_task    => {},
+                        _ = &mut recv_task    => { monitor_task.abort(); ping_task.abort(); },
+                        _ = &mut monitor_task => { recv_task.abort();    ping_task.abort(); },
+                        _ = &mut ping_task    => { recv_task.abort();    monitor_task.abort(); },
                     }
 
                     // ── Cleanup after disconnect ───────────────────────────────────
