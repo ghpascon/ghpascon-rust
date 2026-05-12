@@ -1,3 +1,5 @@
+pub mod devices;
+
 pub mod utils {
     pub mod dummy_event;
     pub mod functions;

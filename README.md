@@ -54,8 +54,8 @@ The structure also maintains a fast EPC index:
 This means one EPC can reference more than one key/TID while keeping most operations in O(1).
 There is no numeric `id` in the public record; the internal key is the stable identifier.
 
-Every tag is stored and returned as a dynamic `serde_json::Map<String, Value>` (`TagRecord`).
-After `add`, callers receive `{ is_new, tag }` and can add custom fields on the returned map.
+Every tag snapshot is a dynamic `serde_json::Map<String, Value>` (`TagRecord`).
+`add` and `get_by_*` return a shared `Tag` (`Arc<Mutex<TagRecord>>`) so you can mutate the stored record in place.
 
 #### Key types
 
@@ -160,6 +160,99 @@ Returns the directory containing the running executable.
 
 Non-blocking JSON logger with daily file rotation, automatic retention cleanup, and coloured console output. See the module docs for full usage.
 
+---
+
+### `devices::rfid::x714`
+
+X714 RFID reader with automatic reconnection, inspired by the Python implementation.
+Built on `Arc<X714Shared>` so `X714: Clone` is cheap – all clones share the same live connection state.
+
+Transport status:
+
+| Transport | Status                                                           |
+| --------- | ---------------------------------------------------------------- |
+| TCP       | Full: reconnection loop + receive task + monitor + 10 s ping     |
+| Serial    | Full: VID/PID auto-detect, `tokio-serial`, reconnection loop     |
+| BLE       | Stub: logs "not implemented"; replace body once `btleplug` added |
+
+#### Architecture
+
+All mutable runtime state lives in `Arc<X714Shared>`:
+`is_connected` · `is_reading` · `serial_number` · `writer` · `running`
+
+`connect()` runs the reconnection loop **forever**. Spawn it as a background task:
+
+```rust
+let bg = reader.clone();
+tokio::spawn(async move { bg.connect().await; });
+```
+
+On every successful connection the reader automatically calls `config_reader()` + optionally
+`start_inventory()` (mirrors Python's `on_connected()`). Reconnection happens automatically
+without user code.
+
+#### Key points
+
+- `ConnectionType`: `Serial`, `Tcp`, `Ble`.
+- `X714Config` / `X714::from_map(HashMap<String, Value>)` — build from dynamic params.
+- Default event sink: `utils::dummy_event::dummy_event`. Override with `with_event_handler(...)`.
+- `parse_line(frame)` / `on_receive(data)` parse reader lines into typed `X714Event` values and
+  update internal state automatically.
+
+#### Main API
+
+| Method                                           | Description                                                |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| `X714::new(config)`                              | Create from `X714Config`                                   |
+| `X714::from_map(params)`                         | Create from `HashMap<String, Value>`                       |
+| `X714::default()`                                | Default Serial config                                      |
+| `with_event_handler(h)` / `set_event_handler(h)` | Replace event sink                                         |
+| `connect().await`                                | Run reconnection loop forever (spawn as background task)   |
+| `close().await`                                  | Stop the reconnection loop and release resources           |
+| `write(cmd).await`                               | Send a command over the current transport                  |
+| `is_connected() / is_reading()`                  | Runtime state accessors                                    |
+| `serial_number()`                                | Returns `Option<String>` set after `#name:` frame received |
+| `parse_line(frame)`                              | Parse + dispatch events, returns `Vec<X714Event>`          |
+| `on_receive(data)`                               | Parse one raw line (no return value)                       |
+| `config_commands()`                              | Build `Vec<String>` with all setup commands                |
+| `start_inventory().await`                        | Send `#READ:ON` and update state                           |
+| `stop_inventory().await`                         | Send `#READ:OFF` and update state                          |
+| `clear_tags().await`                             | Send `#CLEAR`                                              |
+| `config_reader().await`                          | Send all config commands                                   |
+| `get_reader_info().await`                        | Poll `#get_info` until serial number is received           |
+| `write_epc(...).await`                           | Write new EPC to a tag                                     |
+| `write_gpo(...).await`                           | Control GPO pin (static or pulsed)                         |
+| `to_map()`                                       | Export config back to map                                  |
+| `connect_instruction()`                          | Human-readable connection string                           |
+
+```rust
+use std::collections::HashMap;
+use std::time::Duration;
+
+use ghpascon_rust::devices::rfid::x714::X714;
+use serde_json::{Number, Value};
+
+#[tokio::main]
+async fn main() {
+    let mut params = HashMap::new();
+    params.insert("name".to_string(), Value::String("dock-x714".to_string()));
+    params.insert("connection_type".to_string(), Value::String("TCP".to_string()));
+    params.insert("ip".to_string(), Value::String("192.168.1.50".to_string()));
+    params.insert("tcp_port".to_string(), Value::Number(Number::from(23)));
+
+    let reader = X714::from_map(params).expect("valid config");
+    println!("{}", reader.connect_instruction());
+
+    // connect() runs forever – always spawn it as a background task
+    let bg = reader.clone();
+    tokio::spawn(async move { bg.connect().await; });
+
+    tokio::time::sleep(Duration::from_secs(15)).await;
+    println!("connected={}, reading={}", reader.is_connected(), reader.is_reading());
+    reader.close().await;
+}
+```
+
 ## Examples
 
 ```bash
@@ -167,6 +260,9 @@ cargo run --example utils_regex
 cargo run --example example_logger
 cargo run --example utils_delayed_function
 cargo run --example example_tag_list
+cargo run --example x714_basic
+cargo run --example x714_custom_event
+cargo run --example x714_from_map
 ```
 
 ## Scripts

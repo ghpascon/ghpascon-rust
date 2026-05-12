@@ -1,6 +1,6 @@
 [package]
 name = "ghpascon-rust"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "A personal Rust utility library"
 license = "MIT"
@@ -15,6 +15,8 @@ hex = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serialport = "4"
+tokio-serial = "5"
 
 [dev-dependencies]
 tempfile = "3"
@@ -35,3 +37,15 @@ path = "examples/utils/delayed_function.rs"
 [[example]]
 name = "example_tag_list"
 path = "examples/utils/tag_list.rs"
+
+[[example]]
+name = "x714_basic"
+path = "examples/devices/rfid/x714/basic.rs"
+
+[[example]]
+name = "x714_custom_event"
+path = "examples/devices/rfid/x714/custom_event.rs"
+
+[[example]]
+name = "x714_from_map"
+path = "examples/devices/rfid/x714/from_map.rs"

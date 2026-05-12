@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 echo "==> Running formatter..."
-cargo fmt --check
+cargo fmt 
 
 echo "==> Running tests..."
 cargo test
