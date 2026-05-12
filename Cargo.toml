@@ -1,6 +1,6 @@
 [package]
 name = "ghpascon-rust"
-version = "0.2.5"
+version = "0.3.0"
 edition = "2024"
 description = "A personal Rust utility library"
 license = "MIT"
@@ -8,7 +8,30 @@ repository = "https://github.com/ghpascon/ghpascon-rust"
 
 [dependencies]
 regex = "1"
+dashmap = "6"
+tokio = { version = "1", features = ["full"] }
+sha2 = "0.11.0"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+filetime = "0.2"
 
 [[example]]
 name = "utils_regex"
 path = "examples/utils/regex.rs"
+
+[[example]]
+name = "example_logger"
+path = "examples/utils/logger_manager.rs"
+
+[[example]]
+name = "utils_delayed_function"
+path = "examples/utils/delayed_function.rs"
+
+[[example]]
+name = "example_tag_list"
+path = "examples/utils/tag_list.rs"
