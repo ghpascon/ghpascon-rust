@@ -466,6 +466,7 @@ cargo run --example utils_regex
 cargo run --example example_logger
 cargo run --example utils_delayed_function
 cargo run --example example_tag_list
+cargo run --example taglist_performance
 cargo run --example x714_basic
 cargo run --example x714_custom_event
 cargo run --example x714_from_map

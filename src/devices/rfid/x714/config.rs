@@ -5,6 +5,49 @@ use serde_json::{Map, Number, Value};
 
 pub type ParamMap = HashMap<String, Value>;
 
+// ── Default configuration ─────────────────────────────────────────────────────
+//
+// All default values for X714Config live here.
+// Edit this JSON to change defaults used by X714Config::default() and
+// as the base for X714Config::from_map().
+//
+pub const DEFAULT_CONFIG_JSON: &str = r#"{
+    "name":             "X714",
+    "connection_type":  "SERIAL",
+
+    "port":     "AUTO",
+    "baudrate":  115200,
+    "vid":       1,
+    "pid":       1,
+
+    "ip":       "192.168.1.100",
+    "tcp_port":  23,
+
+    "ble_name":         "SMTX",
+    "ble_service_uuid": "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
+    "ble_rx_uuid":      "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
+    "ble_tx_uuid":      "6E400003-B5A3-F393-E0A9-E50E24DCCA9E",
+
+    "buzzer":        false,
+    "session":       1,
+    "start_reading": false,
+    "gpi_start":     false,
+    "always_send":   true,
+    "simple_send":   false,
+    "keyboard":      false,
+    "decode_gtin":   false,
+    "hotspot":       true,
+
+    "reconnection_time":            3,
+    "prefix":                       "",
+    "protected_inventory_active":   false,
+    "protected_inventory_password": "12345678",
+
+    "active_ant": [1],
+    "read_power":  22,
+    "read_rssi":   -120
+}"#;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ConnectionType {
     Serial,
@@ -127,17 +170,28 @@ pub struct X714Config {
 
 impl Default for X714Config {
     fn default() -> Self {
+        let params: ParamMap =
+            serde_json::from_str(DEFAULT_CONFIG_JSON).expect("DEFAULT_CONFIG_JSON is valid JSON");
+        Self::from_map(params).expect("DEFAULT_CONFIG_JSON produces a valid config")
+    }
+}
+
+impl X714Config {
+    /// Hard-coded base config used as the starting point for `from_map`.
+    /// These values are the fallback for any key absent from the caller's map.
+    /// Should match `DEFAULT_CONFIG_JSON` – edit both together.
+    fn base() -> Self {
         let mut ant_dict = BTreeMap::new();
-        for (key, active) in [("1", true), ("2", false), ("3", false), ("4", false)] {
+        for ant in [1_u8, 2, 3, 4] {
             ant_dict.insert(
-                key.to_string(),
+                ant.to_string(),
                 AntennaConfig {
-                    active,
-                    ..AntennaConfig::default()
+                    active: ant == 1,
+                    power: 22,
+                    rssi: -120,
                 },
             );
         }
-
         Self {
             name: "X714".to_string(),
             connection_type: ConnectionType::Serial,
@@ -160,11 +214,9 @@ impl Default for X714Config {
             ant_dict,
         }
     }
-}
 
-impl X714Config {
     pub fn from_map(params: ParamMap) -> Result<Self, String> {
-        let mut config = Self::default();
+        let mut config = Self::base(); // use base() to avoid Default<->from_map recursion
 
         if let Some(v) = get_string(&params, "name") {
             config.name = v;

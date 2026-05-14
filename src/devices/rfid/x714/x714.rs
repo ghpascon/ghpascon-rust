@@ -16,6 +16,8 @@ pub(crate) struct X714Shared {
     pub serial_number: Mutex<Option<String>>,
     /// Generic async writer – holds OwnedWriteHalf (TCP) or WriteHalf<SerialStream> (Serial).
     pub writer: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>,
+    /// BLE write channel – set by run_ble_loop, None for Serial/TCP.
+    pub ble_write_tx: tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>>,
     /// Set to `false` by `close()` to break reconnection loops.
     pub running: AtomicBool,
 }
@@ -27,6 +29,7 @@ impl X714Shared {
             is_reading: AtomicBool::new(false),
             serial_number: Mutex::new(None),
             writer: tokio::sync::Mutex::new(None),
+            ble_write_tx: tokio::sync::Mutex::new(None),
             running: AtomicBool::new(true),
         })
     }
@@ -159,6 +162,7 @@ impl X714 {
         self.shared.is_reading.store(false, Ordering::Relaxed);
         *self.shared.serial_number.lock().unwrap() = None;
         *self.shared.writer.lock().await = None;
+        *self.shared.ble_write_tx.lock().await = None;
         dispatch_event(
             &self.on_event,
             &self.config.name,
@@ -169,13 +173,26 @@ impl X714 {
     // ─── Write ────────────────────────────────────────────────────────────────
 
     /// Send a command string over the current transport (appends `\n`).
+    /// Handles Serial/TCP (stream writer) and BLE (unbounded channel) transparently.
     pub async fn write(&self, command: &str) -> Result<(), String> {
+        let frame = format!("{}\n", command.trim()).into_bytes();
+
+        // BLE path: send through the mpsc channel to the BLE write task.
+        {
+            let guard = self.shared.ble_write_tx.lock().await;
+            if let Some(sender) = guard.as_ref() {
+                return sender
+                    .send(frame)
+                    .map_err(|e| format!("BLE write channel closed: {e}"));
+            }
+        }
+
+        // Serial / TCP path: write directly to the async stream.
         use tokio::io::AsyncWriteExt;
         let mut guard = self.shared.writer.lock().await;
         if let Some(writer) = guard.as_mut() {
-            let frame = format!("{}\n", command.trim());
             writer
-                .write_all(frame.as_bytes())
+                .write_all(&frame)
                 .await
                 .map_err(|e| format!("write error: {e}"))
         } else {

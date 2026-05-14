@@ -1,0 +1,9 @@
+{
+  "READER": "ACUPAD",
+  "beep": false,
+  "start_reading": true,
+  "session": 1,
+  "read_power": 22,
+  "read_rssi": 0,
+  "active_ant": [1]
+}

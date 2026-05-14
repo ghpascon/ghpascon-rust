@@ -1,6 +1,7 @@
 mod ble_protocol;
 mod commands;
 mod config;
+pub mod config_example;
 mod parser;
 mod serial_protocol;
 mod tcp_protocol;
