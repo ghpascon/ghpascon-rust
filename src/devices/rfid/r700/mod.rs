@@ -1,4 +1,5 @@
 mod config;
+pub mod config_example;
 mod http_protocol;
 mod r700;
 mod transport;
