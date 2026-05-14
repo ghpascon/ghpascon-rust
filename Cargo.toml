@@ -71,18 +71,6 @@ name = "device_manager_example"
 path = "examples/devices/device_manager_example.rs"
 
 [[example]]
-name = "acupad_basic"
-path = "examples/devices/rfid/acupad/basic.rs"
-
-[[example]]
-name = "acupad_custom_event"
-path = "examples/devices/rfid/acupad/custom_event.rs"
-
-[[example]]
-name = "acupad_write_epc"
-path = "examples/devices/rfid/acupad/write_epc.rs"
-
-[[example]]
 name = "r700_gpi"
 path = "examples/devices/rfid/r700/gpi.rs"
 
