@@ -1,6 +1,6 @@
 [package]
 name = "ghpascon-rust"
-version = "0.5.1"
+version = "1.0.0"
 edition = "2024"
 description = "A personal Rust utility library"
 license = "MIT"
@@ -10,7 +10,7 @@ repository = "https://github.com/ghpascon/ghpascon-rust"
 regex = "1"
 dashmap = "6"
 tokio = { version = "1", features = ["full"] }
-sha2 = "0.11.0"
+sha2 = "0.10"
 hex = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
@@ -69,3 +69,59 @@ path = "examples/devices/rfid/r700/custom_event.rs"
 [[example]]
 name = "device_manager_example"
 path = "examples/devices/device_manager_example.rs"
+
+[[example]]
+name = "acupad_basic"
+path = "examples/devices/rfid/acupad/basic.rs"
+
+[[example]]
+name = "acupad_custom_event"
+path = "examples/devices/rfid/acupad/custom_event.rs"
+
+[[example]]
+name = "acupad_write_epc"
+path = "examples/devices/rfid/acupad/write_epc.rs"
+
+[[example]]
+name = "r700_gpi"
+path = "examples/devices/rfid/r700/gpi.rs"
+
+[[example]]
+name = "r700_protected_inventory"
+path = "examples/devices/rfid/r700/protected_inventory.rs"
+
+[[example]]
+name = "r700_write_epc"
+path = "examples/devices/rfid/r700/write_epc.rs"
+
+[[example]]
+name = "r700_gpo"
+path = "examples/devices/rfid/r700/gpo.rs"
+
+[[example]]
+name = "serial_device_basic"
+path = "examples/devices/generic/serial/basic.rs"
+
+[[example]]
+name = "tcp_device_basic"
+path = "examples/devices/generic/tcp/basic.rs"
+
+[[example]]
+name = "sato_basic"
+path = "examples/devices/printer/sato/basic.rs"
+
+[[example]]
+name = "sato_print_single"
+path = "examples/devices/printer/sato/print_single.rs"
+
+[[example]]
+name = "sato_print_list"
+path = "examples/devices/printer/sato/print_list.rs"
+
+[[example]]
+name = "sato_sequential"
+path = "examples/devices/printer/sato/sequential.rs"
+
+[[example]]
+name = "sato_ws4"
+path = "examples/devices/printer/sato/ws4.rs"
