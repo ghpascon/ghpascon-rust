@@ -20,7 +20,7 @@ pub type EventHandler = dyn FnMut(&str, &str, Option<Value>) + Send + 'static;
 pub type SharedEventHandler = Arc<Mutex<Box<EventHandler>>>;
 
 static CONFIG_EXAMPLES: &[(&str, fn() -> HashMap<String, Value>)] = &[
-    ("X714_DEFAULT", || super::rfid::x714::config_example::xpad_map()),
+    ("X714_DEFAULT", || super::rfid::x714::config_example::x714_default_map()),
     ("X714_SERIAL", || super::rfid::x714::config_example::x714_map()),
     ("X714_TCP", || super::rfid::x714::config_example::x714_tcp_map()),
     ("X714_BLE", || super::rfid::x714::config_example::x714_ble_map()),

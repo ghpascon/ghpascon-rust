@@ -10,7 +10,7 @@ fn json_to_map(v: Value) -> ParamMap {
 }
 
 /// X714 via serial — auto-start reading, antenna 1, session 0, power 22 dBm.
-pub fn xpad_map() -> ParamMap {
+pub fn x714_default_map() -> ParamMap {
     json_to_map(json!({
         "reader":           "X714",
         "start_reading":    true,
