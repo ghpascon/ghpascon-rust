@@ -30,6 +30,7 @@ fn main() {
     ]);
 
     let reader = X714::from_map(params).expect("config from map must work");
+    println!("X714 from_map example (BLE)");
     println!("{}", reader.connect_instruction());
     println!("{:#?}", reader.to_map());
 }

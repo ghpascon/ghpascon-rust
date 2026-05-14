@@ -35,8 +35,20 @@ impl SatoWs4Printer {
         self.0.is_connected()
     }
 
+    pub fn can_print(&self) -> bool {
+        self.0.can_print()
+    }
+
+    pub fn pending_print_jobs(&self) -> usize {
+        self.0.pending_print_jobs()
+    }
+
     pub fn connect_instruction(&self) -> String {
         self.0.connect_instruction()
+    }
+
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        self.0.to_map()
     }
 
     pub fn set_event_handler(&mut self, handler: SharedEventHandler) {

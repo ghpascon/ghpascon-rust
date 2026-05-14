@@ -12,7 +12,6 @@ use tokio::task::JoinHandle;
 
 use super::rfid::r700::R700;
 use super::rfid::x714::X714;
-use super::rfid::acupad::Acupad;
 use super::generic::serial::SerialDevice;
 use super::generic::tcp::TcpDevice;
 use super::printer::sato::{SatoPrinter, SatoWs4Printer};
@@ -21,7 +20,7 @@ pub type EventHandler = dyn FnMut(&str, &str, Option<Value>) + Send + 'static;
 pub type SharedEventHandler = Arc<Mutex<Box<EventHandler>>>;
 
 static CONFIG_EXAMPLES: &[(&str, fn() -> HashMap<String, Value>)] = &[
-    ("XPAD", || super::rfid::x714::config_example::xpad_map()),
+    ("X714_DEFAULT", || super::rfid::x714::config_example::xpad_map()),
     ("X714_SERIAL", || super::rfid::x714::config_example::x714_map()),
     ("X714_TCP", || super::rfid::x714::config_example::x714_tcp_map()),
     ("X714_BLE", || super::rfid::x714::config_example::x714_ble_map()),
@@ -30,8 +29,6 @@ static CONFIG_EXAMPLES: &[(&str, fn() -> HashMap<String, Value>)] = &[
     ("R700_IOT_DICT", || super::rfid::r700::config_example::r700_iot_dict_map()),
     ("R700_IOT_GPI", || super::rfid::r700::config_example::r700_iot_gpi_map()),
     ("R700_PROTECTED_INVENTORY", || super::rfid::r700::config_example::r700_protected_inventory_map()),
-    ("ACUPAD", || super::rfid::acupad::config_example::acupad_default_map()),
-    ("ACUPAD_BASIC", || super::rfid::acupad::config_example::acupad_basic_map()),
     ("SERIAL", || super::generic::serial::config_example::serial_default_map()),
     ("SERIAL_CUSTOM", || super::generic::serial::config_example::serial_custom_map()),
     ("TCP", || super::generic::tcp::config_example::tcp_default_map()),
@@ -43,7 +40,6 @@ static CONFIG_EXAMPLES: &[(&str, fn() -> HashMap<String, Value>)] = &[
 pub enum Device {
     X714(X714),
     R700(R700),
-    Acupad(Acupad),
     Serial(SerialDevice),
     Tcp(TcpDevice),
     Sato(SatoPrinter),
@@ -55,7 +51,6 @@ impl Clone for Device {
         match self {
             Self::X714(d) => Self::X714(d.clone()),
             Self::R700(d) => Self::R700(d.clone()),
-            Self::Acupad(d) => Self::Acupad(d.clone()),
             Self::Serial(d) => Self::Serial(d.clone()),
             Self::Tcp(d) => Self::Tcp(d.clone()),
             Self::Sato(d) => Self::Sato(d.clone()),
@@ -69,7 +64,6 @@ impl Device {
         match self {
             Self::X714(d) => &d.config.name,
             Self::R700(d) => &d.config.name,
-            Self::Acupad(d) => &d.config.name,
             Self::Serial(d) => &d.config.name,
             Self::Tcp(d) => &d.config.name,
             Self::Sato(d) => &d.config.name,
@@ -81,7 +75,6 @@ impl Device {
         match self {
             Self::X714(_) => "X714",
             Self::R700(_) => "R700_IOT",
-            Self::Acupad(_) => "ACUPAD",
             Self::Serial(_) => "SERIAL",
             Self::Tcp(_) => "TCP",
             Self::Sato(_) => "SATO",
@@ -89,11 +82,21 @@ impl Device {
         }
     }
 
+    pub fn device_class(&self) -> &'static str {
+        match self {
+            Self::X714(_) => "X714",
+            Self::R700(_) => "R700",
+            Self::Serial(_) => "SerialDevice",
+            Self::Tcp(_) => "TcpDevice",
+            Self::Sato(_) => "SatoPrinter",
+            Self::SatoWs4(_) => "SatoWs4Printer",
+        }
+    }
+
     pub fn is_connected(&self) -> bool {
         match self {
             Self::X714(d) => d.is_connected(),
             Self::R700(d) => d.is_connected(),
-            Self::Acupad(d) => d.is_connected(),
             Self::Serial(d) => d.is_connected(),
             Self::Tcp(d) => d.is_connected(),
             Self::Sato(d) => d.is_connected(),
@@ -105,7 +108,6 @@ impl Device {
         match self {
             Self::X714(d) => d.is_reading(),
             Self::R700(d) => d.is_reading(),
-            Self::Acupad(d) => d.is_reading(),
             Self::Serial(_) => false,
             Self::Tcp(_) => false,
             Self::Sato(_) => false,
@@ -113,11 +115,18 @@ impl Device {
         }
     }
 
+    pub fn is_gpi_trigger_on(&self) -> bool {
+        match self {
+            Self::X714(d) => d.config.gpi_start,
+            Self::R700(d) => d.config.gpi_start,
+            Self::Serial(_) | Self::Tcp(_) | Self::Sato(_) | Self::SatoWs4(_) => false,
+        }
+    }
+
     pub fn serial_number(&self) -> Option<String> {
         match self {
             Self::X714(d) => d.serial_number(),
             Self::R700(d) => d.serial_number(),
-            Self::Acupad(d) => d.serial_number(),
             Self::Serial(_) => None,
             Self::Tcp(_) => None,
             Self::Sato(_) => None,
@@ -125,11 +134,37 @@ impl Device {
         }
     }
 
+    pub fn can_print(&self) -> bool {
+        match self {
+            Self::Sato(d) => d.can_print(),
+            Self::SatoWs4(d) => d.can_print(),
+            _ => false,
+        }
+    }
+
+    pub fn pending_print_jobs(&self) -> usize {
+        match self {
+            Self::Sato(d) => d.pending_print_jobs(),
+            Self::SatoWs4(d) => d.pending_print_jobs(),
+            _ => 0,
+        }
+    }
+
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        match self {
+            Self::X714(d) => d.to_map(),
+            Self::R700(d) => d.to_map(),
+            Self::Serial(d) => d.to_map(),
+            Self::Tcp(d) => d.to_map(),
+            Self::Sato(d) => d.to_map(),
+            Self::SatoWs4(d) => d.to_map(),
+        }
+    }
+
     pub fn connect_instruction(&self) -> String {
         match self {
             Self::X714(d) => d.connect_instruction(),
             Self::R700(d) => d.connect_instruction(),
-            Self::Acupad(d) => d.connect_instruction(),
             Self::Serial(d) => d.connect_instruction(),
             Self::Tcp(d) => d.connect_instruction(),
             Self::Sato(d) => d.connect_instruction(),
@@ -141,7 +176,6 @@ impl Device {
         match self {
             Self::X714(d) => d.set_event_handler(handler),
             Self::R700(d) => d.set_event_handler(handler),
-            Self::Acupad(d) => d.set_event_handler(handler),
             Self::Serial(d) => d.set_event_handler(handler),
             Self::Tcp(d) => d.set_event_handler(handler),
             Self::Sato(d) => d.set_event_handler(handler),
@@ -153,7 +187,6 @@ impl Device {
         match self {
             Self::X714(d) => d.connect().await,
             Self::R700(d) => d.connect().await,
-            Self::Acupad(d) => d.connect().await,
             Self::Serial(d) => d.connect().await,
             Self::Tcp(d) => d.connect().await,
             Self::Sato(d) => d.connect().await,
@@ -165,7 +198,6 @@ impl Device {
         match self {
             Self::X714(d) => d.close().await,
             Self::R700(d) => d.close().await,
-            Self::Acupad(d) => d.close().await,
             Self::Serial(d) => d.close().await,
             Self::Tcp(d) => d.close().await,
             Self::Sato(d) => d.close().await,
@@ -177,7 +209,6 @@ impl Device {
         match self {
             Self::X714(d) => d.start_inventory().await,
             Self::R700(d) => d.start_inventory().await,
-            Self::Acupad(d) => d.start_inventory().await,
             _ => Err("device type does not support this operation".to_string()),
         }
     }
@@ -186,7 +217,6 @@ impl Device {
         match self {
             Self::X714(d) => d.stop_inventory().await,
             Self::R700(d) => d.stop_inventory().await,
-            Self::Acupad(d) => d.stop_inventory().await,
             _ => Err("device type does not support this operation".to_string()),
         }
     }
@@ -201,7 +231,6 @@ impl Device {
         match self {
             Self::X714(d) => d.write_epc(target_identifier, target_value, new_epc, password).await,
             Self::R700(d) => d.write_epc(target_identifier, target_value, new_epc, password).await,
-            Self::Acupad(d) => d.write_epc(target_identifier, target_value, new_epc, password).await,
             _ => Err("device type does not support this operation".to_string()),
         }
     }
@@ -210,21 +239,26 @@ impl Device {
         match self {
             Self::X714(d) => d.write_gpo(pin, state, control, time_ms).await,
             Self::R700(d) => d.write_gpo(pin, state, control, time_ms as u32).await,
-            Self::Acupad(d) => d.write_gpo(pin, state, control, time_ms).await,
             _ => Err("device type does not support this operation".to_string()),
         }
     }
 }
 
 /// Snapshot of device state (does not hold a reference to the device).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct DeviceInfo {
     pub name: String,
     pub device_type: String,
+    pub device_class: String,
     pub is_connected: bool,
     pub is_reading: bool,
-    pub serial_number: Option<String>,
+    pub is_gpi_trigger_on: bool,
+    pub can_print: bool,
+    pub to_print: usize,
+    pub has_serial_number: bool,
+    pub serial_number: String,
     pub connect_instruction: String,
+    pub current_config: HashMap<String, Value>,
 }
 
 /// Manages multiple devices: loads JSON configs, connects, dispatches events.
@@ -322,10 +356,6 @@ impl DeviceManager {
                 Ok(d) => { eprintln!("  ✅ R700 '{}' → {}", name, d.connect_instruction()); self.devices.push(Device::R700(d)); }
                 Err(e) => eprintln!("  ❌ R700 '{}' config error: {e}", name),
             },
-            "ACUPAD" => match Acupad::from_map(data) {
-                Ok(d) => { eprintln!("  ✅ ACUPAD '{}' → {}", name, d.connect_instruction()); self.devices.push(Device::Acupad(d)); }
-                Err(e) => eprintln!("  ❌ ACUPAD '{}' config error: {e}", name),
-            },
             "SERIAL" => {
                 let d = SerialDevice::from_map(data);
                 eprintln!("  ✅ SERIAL '{}' → {}", name, d.connect_instruction());
@@ -422,13 +452,21 @@ impl DeviceManager {
     }
 
     fn build_info(d: &Device) -> DeviceInfo {
+        let serial_number = d.serial_number();
+        let has_serial_number = d.is_connected() && serial_number.is_some();
         DeviceInfo {
             name: d.name().to_string(),
             device_type: d.device_type().to_string(),
+            device_class: d.device_class().to_string(),
             is_connected: d.is_connected(),
-            is_reading: d.is_reading(),
-            serial_number: d.serial_number(),
+            is_reading: d.is_connected() && d.is_reading(),
+            is_gpi_trigger_on: d.is_gpi_trigger_on(),
+            can_print: d.can_print(),
+            to_print: d.pending_print_jobs(),
+            has_serial_number,
+            serial_number: serial_number.unwrap_or_else(|| "Unknown".to_string()),
             connect_instruction: d.connect_instruction(),
+            current_config: d.to_map(),
         }
     }
 
@@ -440,6 +478,17 @@ impl DeviceManager {
         let d = self.get_device(name)?;
         if !d.is_connected() { return None; }
         d.serial_number()
+    }
+
+    pub fn get_device_config(&self, name: &str) -> Option<HashMap<String, Value>> {
+        self.get_device(name).map(Device::to_map)
+    }
+
+    pub fn get_device_configs(&self) -> HashMap<String, HashMap<String, Value>> {
+        self.devices
+            .iter()
+            .map(|d| (d.name().to_string(), d.to_map()))
+            .collect()
     }
 
     pub async fn start_inventory(&self, name: &str) -> Result<(), String> {
@@ -496,5 +545,55 @@ impl DeviceManager {
         CONFIG_EXAMPLES.iter()
             .find(|(n, _)| n.eq_ignore_ascii_case(name))
             .map(|(_, f)| f())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn device_info_includes_runtime_and_config_fields() {
+        let mut manager = DeviceManager::new("/tmp/unused");
+        manager.add_device(
+            "dock-reader",
+            "X714",
+            HashMap::from([
+                ("reader".to_string(), Value::String("X714".to_string())),
+                ("connection_type".to_string(), Value::String("TCP".to_string())),
+                ("ip".to_string(), Value::String("192.168.1.50".to_string())),
+                ("tcp_port".to_string(), json!(23)),
+                ("gpi_start".to_string(), Value::Bool(true)),
+            ]),
+        );
+
+        let info = manager
+            .get_device_info(Some("dock-reader"))
+            .into_iter()
+            .next()
+            .expect("device info");
+
+        assert_eq!(info.name, "dock-reader");
+        assert_eq!(info.device_type, "X714");
+        assert_eq!(info.device_class, "X714");
+        assert!(!info.is_connected);
+        assert!(!info.is_reading);
+        assert!(info.is_gpi_trigger_on);
+        assert!(!info.can_print);
+        assert_eq!(info.to_print, 0);
+        assert!(!info.has_serial_number);
+        assert_eq!(info.serial_number, "Unknown");
+        assert_eq!(
+            info.current_config.get("connection_type").and_then(Value::as_str),
+            Some("TCP")
+        );
+    }
+
+    #[test]
+    fn config_examples_list_only_supported_devices() {
+        let examples = DeviceManager::get_config_examples();
+        assert!(examples.contains(&"X714_DEFAULT"));
+        assert_eq!(examples.len(), 15);
     }
 }

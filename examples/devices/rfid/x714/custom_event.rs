@@ -96,6 +96,7 @@ async fn main() {
         .expect("valid config")
         .with_event_handler(print_handler(Arc::clone(&tags)));
 
+    println!("X714 custom event example (SERIAL)");
     println!("Connecting via Serial {}  (Ctrl+C to stop)\n", port);
 
     // Background: reconnection loop

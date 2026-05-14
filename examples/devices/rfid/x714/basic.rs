@@ -24,6 +24,7 @@ async fn main() {
 
     let reader = X714::from_map(params).expect("valid config");
 
+    println!("X714 basic example (TCP)");
     println!("connect via: {}", reader.connect_instruction());
     println!("config commands:");
     for cmd in reader.config_commands() {

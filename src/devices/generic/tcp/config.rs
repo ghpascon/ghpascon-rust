@@ -41,6 +41,9 @@ impl TcpDeviceConfig {
         if let Some(v) = params.get("ip").and_then(Value::as_str) {
             config.ip = v.to_string();
         }
+        if let Some(v) = params.get("host").and_then(Value::as_str) {
+            config.ip = v.to_string();
+        }
         if let Some(v) = params
             .get("port")
             .and_then(Value::as_u64)

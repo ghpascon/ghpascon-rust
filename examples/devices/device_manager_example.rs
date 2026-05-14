@@ -72,12 +72,36 @@ async fn main() {
         .with_event_handler(build_handler(Arc::clone(&tags)));
 
     manager.connect_devices(false).await;
+    let device_names = manager.get_device_names();
 
     println!(
         "\n{} device(s) loaded: {:?}",
         manager.len(),
-        manager.get_device_names()
+        device_names
     );
+    println!(
+        "available config examples: {:?}",
+        DeviceManager::get_config_examples()
+    );
+    println!(
+        "current device info: {}",
+        serde_json::to_string_pretty(&manager.get_device_info(None)).unwrap()
+    );
+    if let Some(first_name) = device_names.first() {
+        if let Some(config) = manager.get_device_config(first_name) {
+            println!(
+                "current config for '{}': {}",
+                first_name,
+                serde_json::to_string_pretty(&config).unwrap()
+            );
+        }
+    }
+    if let Some(example) = DeviceManager::get_config_example("X714_DEFAULT") {
+        println!(
+            "example config (X714_DEFAULT): {}",
+            serde_json::to_string_pretty(&example).unwrap()
+        );
+    }
     println!("Press Ctrl+C to stop\n");
 
     // Dump all tags every 10 s

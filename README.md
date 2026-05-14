@@ -369,7 +369,7 @@ async fn main() {
 
 ### `devices::device_manager`
 
-Manages multiple devices (X714, R700, ACUPAD, SerialDevice, TcpDevice, SatoPrinter, SatoWs4Printer)
+Manages multiple devices (X714, R700, SerialDevice, TcpDevice, SatoPrinter, SatoWs4Printer)
 from `.json` config files. Inspired by the Python `DeviceManager`.
 
 #### JSON config format
@@ -381,7 +381,6 @@ defaults are applied automatically. The filename (without `.json`) becomes the d
 | --------------- | --------------------------- |
 | X714            | `"X714"`                    |
 | Impinj R700     | `"R700_IOT"`                |
-| ACUPAD          | `"ACUPAD"`                  |
 | Generic Serial  | `"SERIAL"`                  |
 | Generic TCP     | `"TCP"`                     |
 | SATO printer    | `"SATO"`                    |
@@ -390,23 +389,28 @@ defaults are applied automatically. The filename (without `.json`) becomes the d
 ```json
 { "reader": "X714", "connection_type": "TCP", "ip": "192.168.1.50" }
 { "reader": "R700_IOT", "ip": "192.168.1.101", "active_ant": [1, 2] }
-{ "reader": "ACUPAD" }
 { "reader": "SERIAL", "port": "/dev/ttyUSB0" }
-{ "reader": "TCP", "host": "192.168.1.200", "port": 9000 }
+{ "reader": "TCP", "ip": "192.168.1.200", "port": 9000 }
 { "reader": "SATO", "ip": "192.168.1.100" }
 { "reader": "SATO_WS4", "ip": "192.168.1.102" }
 ```
 
 #### DeviceInfo
 
-| Field                 | Type             | Description                              |
-| --------------------- | ---------------- | ---------------------------------------- |
-| `name`                | `String`         | Device name (from filename)              |
-| `device_type`         | `String`         | e.g. `"X714"`, `"R700_IOT"`, `"ACUPAD"` |
-| `is_connected`        | `bool`           | Current connection state                 |
-| `is_reading`          | `bool`           | Current reading/inventory state          |
-| `serial_number`       | `Option<String>` | Serial number (if available)             |
-| `connect_instruction` | `String`         | Human-readable connection string         |
+| Field                 | Type                      | Description                                           |
+| --------------------- | ------------------------- | ----------------------------------------------------- |
+| `name`                | `String`                  | Device name (from filename)                           |
+| `device_type`         | `String`                  | e.g. `"X714"`, `"R700_IOT"`, `"SATO"`                 |
+| `device_class`        | `String`                  | Rust runtime class name                               |
+| `is_connected`        | `bool`                    | Current connection state                              |
+| `is_reading`          | `bool`                    | Current reading/inventory state                       |
+| `is_gpi_trigger_on`   | `bool`                    | `true` when the reader is configured to use GPI start |
+| `can_print`           | `bool`                    | `true` when the device can accept print jobs          |
+| `to_print`            | `usize`                   | Number of queued print jobs                           |
+| `has_serial_number`   | `bool`                    | `true` when a connected device exposed a serial       |
+| `serial_number`       | `String`                  | Serial number or `"Unknown"`                          |
+| `connect_instruction` | `String`                  | Human-readable connection string                      |
+| `current_config`      | `HashMap<String, Value>`  | Current effective device config                       |
 
 #### DeviceManager API
 
@@ -421,9 +425,13 @@ defaults are applied automatically. The filename (without `.json`) becomes the d
 | `disconnect_devices().await`                             | Close all devices and clear the list                     |
 | `get_device_names() -> Vec<String>`                      | Names of all devices                                     |
 | `get_device(name) -> Option<&Device>`                    | Reference to a device by name                            |
+| `get_device_config(name)`                                | Current effective config for one device                  |
+| `get_device_configs()`                                   | Current effective config for all loaded devices          |
 | `get_device_info(name: Option<&str>) -> Vec<DeviceInfo>` | State snapshot for one or all devices                    |
 | `any_device_reading() -> bool`                           | `true` if any device is connected and reading            |
 | `get_serial_number(name) -> Option<String>`              | Serial number of a device (if connected)                 |
+| `get_config_examples()`                                  | Names of the built-in config examples                    |
+| `get_config_example(name)`                               | Built-in config example map by name                      |
 | `start_inventory(name).await`                            | Start inventory on a device                              |
 | `stop_inventory(name).await`                             | Stop inventory on a device                               |
 | `start_inventory_all().await -> HashMap<String, bool>`   | Start on all connected devices                           |
@@ -462,40 +470,17 @@ async fn main() {
 
     manager.connect_devices(false).await;
     println!("Devices: {:?}", manager.get_device_names());
+    println!("Built-in examples: {:?}", DeviceManager::get_config_examples());
+
+    if let Some(config) = manager.get_device_config("serial_x714") {
+        println!("{}", serde_json::to_string_pretty(&config).unwrap());
+    }
 
     tokio::signal::ctrl_c().await.ok();
     manager.cancel_connect_tasks().await;
     manager.disconnect_devices().await;
 }
 ```
-
----
-
-### `devices::rfid::acupad`
-
-ACUPAD RFID reader over serial (USB CDC). Same `Arc<AcupadShared>` architecture — `Acupad: Clone`
-is cheap.
-
-#### Main API
-
-| Method                                           | Description                                              |
-| ------------------------------------------------ | -------------------------------------------------------- |
-| `Acupad::new(config)`                            | Create from `AcupadConfig`                               |
-| `Acupad::from_map(params)`                       | Create from `HashMap<String, Value>`                     |
-| `Acupad::default()`                              | Default config (VID=260, PID=24656, 115200 baud)         |
-| `with_event_handler(h)` / `set_event_handler(h)` | Replace event sink                                       |
-| `connect().await`                                | Run reconnection loop forever (spawn as background task) |
-| `close().await`                                  | Stop loop and release resources                          |
-| `write(cmd).await`                               | Send a command over serial                               |
-| `is_connected() / is_reading()`                  | Runtime state accessors                                  |
-| `serial_number()`                                | Returns `Option<String>`                                 |
-| `parse_line(frame)`                              | Parse + dispatch events, returns `Vec<AcupadEvent>`      |
-| `start_inventory().await`                        | Send `#READ:ON`                                          |
-| `stop_inventory().await`                         | Send `#READ:OFF`                                         |
-| `write_epc(...).await`                           | Write new EPC to a tag                                   |
-| `connect_instruction()`                          | Human-readable connection string                         |
-
----
 
 ### `devices::generic::serial`
 
@@ -558,9 +543,11 @@ Uses `Arc<SatoShared>` — `SatoPrinter: Clone` is cheap.
 | `connect().await`                   | Run reconnection loop forever (spawn as background task) |
 | `close().await`                     | Stop loop and release resources                          |
 | `print(zpl).await`                  | Print ZPL bytes; returns `Result<print_id, error>`       |
-| `add_to_print_queue(labels).await`  | Enqueue a list of ZPL strings                            |
+| `add_to_print_queue(labels).await`  | Enqueue labels; auto-starts once connected               |
 | `process_queue().await`             | Print all queued labels one by one                       |
 | `is_connected()`                    | Runtime state accessor                                   |
+| `can_print()`                       | `true` when the printer is connected                     |
+| `pending_print_jobs()`              | Number of queued labels                                  |
 | `connect_instruction()`             | Human-readable connection string                         |
 
 #### ZPL utilities
@@ -579,9 +566,9 @@ cargo run --example example_tag_list
 cargo run --example taglist_performance
 
 # X714 RFID reader
-cargo run --example x714_basic
-cargo run --example x714_custom_event
-cargo run --example x714_from_map
+cargo run --example x714_basic          # TCP
+cargo run --example x714_custom_event   # SERIAL
+cargo run --example x714_from_map       # BLE
 
 # Impinj R700
 cargo run --example r700_basic -- 192.168.1.101
@@ -590,11 +577,6 @@ cargo run --example r700_gpi -- 192.168.1.101
 cargo run --example r700_protected_inventory -- 192.168.1.101
 cargo run --example r700_write_epc -- 192.168.1.101
 cargo run --example r700_gpo -- 192.168.1.101
-
-# ACUPAD RFID reader
-cargo run --example acupad_basic
-cargo run --example acupad_custom_event
-cargo run --example acupad_write_epc
 
 # Generic devices
 cargo run --example serial_device_basic
@@ -613,13 +595,30 @@ cargo run --example device_manager_example
 
 ## Device config examples
 
-Files in `examples/devices/configs/` show the minimal format for each type:
+Files in `examples/devices/configs/` show sample configs used by the examples:
 
 | File               | Type           | Transport                    |
 | ------------------ | -------------- | ---------------------------- |
-| `dock_x714.json`   | X714           | TCP                          |
 | `serial_x714.json` | X714           | Serial (VID/PID auto-detect) |
 | `dock_r700.json`   | R700 IOT       | HTTPS REST                   |
+
+The `DeviceManager` also exposes built-in example maps via:
+
+- `X714_DEFAULT`
+- `X714_SERIAL`
+- `X714_TCP`
+- `X714_BLE`
+- `X714_ALL`
+- `R700_IOT`
+- `R700_IOT_DICT`
+- `R700_IOT_GPI`
+- `R700_PROTECTED_INVENTORY`
+- `SERIAL`
+- `SERIAL_CUSTOM`
+- `TCP`
+- `TCP_CUSTOM`
+- `SATO`
+- `SATO_WS4`
 
 ## Scripts
 
@@ -639,8 +638,8 @@ Files in `examples/devices/configs/` show the minimal format for each type:
 | `chrono`       | Timestamps (serde feature enabled)                  |
 | `serde`        | Serialisation/deserialisation                       |
 | `serde_json`   | JSON output                                         |
-| `serialport`   | Serial port enumeration (X714/ACUPAD VID/PID detect)|
-| `tokio-serial` | Async serial I/O (X714, ACUPAD, SerialDevice)       |
+| `serialport`   | Serial port enumeration (X714 VID/PID detect)       |
+| `tokio-serial` | Async serial I/O (X714, SerialDevice)               |
 | `reqwest`      | HTTPS REST client with stream support (R700)        |
 | `uuid`         | Print job IDs (SatoPrinter)                         |
 

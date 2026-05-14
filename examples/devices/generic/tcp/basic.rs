@@ -1,7 +1,7 @@
 /// Example: Generic TCP device — connect, write, and receive data.
 ///
 /// Run:
-///   cargo run --example tcp_device_basic -- <host> <port>
+///   cargo run --example tcp_device_basic -- <ip> <port>
 /// or:
 ///   cargo run --example tcp_device_basic
 /// (defaults to 127.0.0.1:9000)
@@ -14,7 +14,7 @@ use serde_json::{Number, Value};
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args
+    let ip = args
         .get(1)
         .cloned()
         .unwrap_or_else(|| "127.0.0.1".to_string());
@@ -25,7 +25,7 @@ async fn main() {
 
     let mut params: HashMap<String, Value> = HashMap::new();
     params.insert("name".to_string(), Value::String("tcp-demo".to_string()));
-    params.insert("host".to_string(), Value::String(host.clone()));
+    params.insert("ip".to_string(), Value::String(ip.clone()));
     params.insert("port".to_string(), Value::Number(Number::from(port)));
 
     let device = TcpDevice::from_map(params);
@@ -44,7 +44,7 @@ async fn main() {
             eprintln!("write error: {}", e);
         }
     } else {
-        println!("Not connected (is something listening on {}:{}?)", host, port);
+        println!("Not connected (is something listening on {}:{}?)", ip, port);
     }
 
     tokio::time::sleep(Duration::from_secs(5)).await;

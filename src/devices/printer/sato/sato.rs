@@ -84,6 +84,18 @@ impl SatoPrinter {
         self.shared.is_connected.load(Ordering::Relaxed)
     }
 
+    pub fn can_print(&self) -> bool {
+        self.is_connected()
+    }
+
+    pub fn pending_print_jobs(&self) -> usize {
+        self.shared
+            .print_queue
+            .try_lock()
+            .map(|queue| queue.len())
+            .unwrap_or(0)
+    }
+
     pub fn to_map(&self) -> ParamMap {
         self.config.to_map()
     }
@@ -204,7 +216,9 @@ impl SatoPrinter {
                 queue.push_back(label);
             }
         }
-        self.process_queue().await;
+        if self.is_connected() {
+            self.process_queue().await;
+        }
     }
 
     pub async fn process_queue(&self) {
@@ -223,6 +237,12 @@ impl SatoPrinter {
             &self.config.name,
             &SatoEvent::Connection(true),
         );
+        if self.pending_print_jobs() > 0 {
+            let printer = self.clone();
+            tokio::spawn(async move {
+                printer.process_queue().await;
+            });
+        }
     }
 
     fn on_disconnected(&self) {
@@ -232,5 +252,22 @@ impl SatoPrinter {
             &self.config.name,
             &SatoEvent::Connection(false),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn queued_labels_are_kept_until_connected() {
+        let printer = SatoPrinter::default();
+        assert!(!printer.can_print());
+
+        printer
+            .add_to_print_queue(vec!["^XA^XZ".to_string(), "^XA^FO50,50^XZ".to_string()])
+            .await;
+
+        assert_eq!(printer.pending_print_jobs(), 2);
     }
 }
