@@ -4,8 +4,7 @@ use serde_json::{Number, Value};
 
 pub type ParamMap = HashMap<String, Value>;
 
-pub const DEFAULT_CONFIG_JSON: &str =
-    r#"{"name":"SERIAL","port":"AUTO","baudrate":9600,"vid":259,"pid":24673,"reconnection_time":3}"#;
+pub const DEFAULT_CONFIG_JSON: &str = r#"{"name":"SERIAL","port":"AUTO","baudrate":9600,"vid":259,"pid":24673,"reconnection_time":3}"#;
 
 #[derive(Debug, Clone)]
 pub struct SerialDeviceConfig {

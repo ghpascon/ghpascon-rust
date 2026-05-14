@@ -18,10 +18,7 @@ async fn main() {
         .get(1)
         .cloned()
         .unwrap_or_else(|| "127.0.0.1".to_string());
-    let port: u16 = args
-        .get(2)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(9000);
+    let port: u16 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(9000);
 
     let mut params: HashMap<String, Value> = HashMap::new();
     params.insert("name".to_string(), Value::String("tcp-demo".to_string()));

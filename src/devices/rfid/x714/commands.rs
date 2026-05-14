@@ -130,6 +130,9 @@ impl X714 {
     }
 
     pub async fn config_reader(&self) -> Result<(), String> {
+        // For BLE, throttling is handled by the 150 ms inter-write delay inside the BLE
+        // write task (ble_protocol.rs). Commands are queued to the mpsc channel here and
+        // processed sequentially by that task, so no extra delays are needed here.
         for cmd in self.config_commands() {
             self.write(&cmd).await?;
         }

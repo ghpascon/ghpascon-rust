@@ -174,13 +174,15 @@ impl X714 {
 
     /// Send a command string over the current transport (appends `\n`).
     /// Handles Serial/TCP (stream writer) and BLE (unbounded channel) transparently.
+    /// BLE operations are serialized to avoid concurrent write conflicts.
     pub async fn write(&self, command: &str) -> Result<(), String> {
         let frame = format!("{}\n", command.trim()).into_bytes();
 
-        // BLE path: send through the mpsc channel to the BLE write task.
+        // BLE path: send through the mpsc channel to the BLE write task with small delay after send.
         {
             let guard = self.shared.ble_write_tx.lock().await;
             if let Some(sender) = guard.as_ref() {
+                // Throttling is handled by the 150 ms delay inside the BLE write task.
                 return sender
                     .send(frame)
                     .map_err(|e| format!("BLE write channel closed: {e}"));

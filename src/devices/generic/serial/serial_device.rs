@@ -84,10 +84,7 @@ impl SerialDevice {
     pub fn connect_instruction(&self) -> String {
         format!(
             "SERIAL {} @ {} (VID={:#06x}, PID={:#06x})",
-            self.config.port,
-            self.config.baudrate,
-            self.config.vid,
-            self.config.pid
+            self.config.port, self.config.baudrate, self.config.vid, self.config.pid
         )
     }
 
@@ -136,7 +133,10 @@ impl SerialDevice {
                             line.clear();
                             match buf_reader.read_line(&mut line).await {
                                 Ok(0) => {
-                                    recv_self.shared.is_connected.store(false, Ordering::Relaxed);
+                                    recv_self
+                                        .shared
+                                        .is_connected
+                                        .store(false, Ordering::Relaxed);
                                     break;
                                 }
                                 Ok(_) => {
@@ -146,7 +146,10 @@ impl SerialDevice {
                                     }
                                 }
                                 Err(_) => {
-                                    recv_self.shared.is_connected.store(false, Ordering::Relaxed);
+                                    recv_self
+                                        .shared
+                                        .is_connected
+                                        .store(false, Ordering::Relaxed);
                                     break;
                                 }
                             }

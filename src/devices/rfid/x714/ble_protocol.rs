@@ -45,7 +45,7 @@ impl X714 {
     }
 
     async fn ble_connect_once(&self) -> Result<(), String> {
-        // \u2500\u2500 1. Get adapter \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // ── 1. Get adapter ──────────────────────────────────────────────────────
         let manager = Manager::new().await.map_err(|e| e.to_string())?;
         let adapters = manager.adapters().await.map_err(|e| e.to_string())?;
         let adapter = adapters
@@ -53,7 +53,7 @@ impl X714 {
             .next()
             .ok_or_else(|| "no BLE adapter found".to_string())?;
 
-        // \u2500\u2500 2. Scan for the target device \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // ── 2. Scan for device (event-driven, 30 s timeout) ─────────────────────
         eprintln!(
             "[{}] BLE scanning for '{}'...",
             self.config.name, self.config.ble.name
@@ -63,67 +63,126 @@ impl X714 {
             .await
             .map_err(|e| e.to_string())?;
 
-        let mut events = adapter.events().await.map_err(|e| e.to_string())?;
-        let target_name = self.config.ble.name.clone();
-        let target_address = self.config.ble.address.clone();
+        // Scope the events stream so it is *dropped* before we call connect().
+        // Keeping the stream alive while connecting can leave stale D-Bus state
+        // in the btleplug/BlueZ pipeline.
+        let peripheral = {
+            let mut events = adapter.events().await.map_err(|e| e.to_string())?;
+            let target_name = self.config.ble.name.clone();
+            let target_address = self.config.ble.address.clone();
 
-        let peripheral = loop {
-            if !self.shared.running.load(Ordering::Relaxed) {
-                adapter.stop_scan().await.ok();
-                return Ok(());
-            }
-
-            let event = match tokio::time::timeout(Duration::from_secs(30), events.next()).await {
-                Ok(Some(e)) => e,
-                Ok(None) => return Err("BLE event stream ended".to_string()),
-                Err(_) => return Err("BLE scan timeout (30 s)".to_string()),
-            };
-
-            let peripheral_id = match event {
-                CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => id,
-                _ => continue,
-            };
-
-            let p = match adapter.peripheral(&peripheral_id).await {
-                Ok(p) => p,
-                Err(_) => continue,
-            };
-
-            let props = match p.properties().await {
-                Ok(Some(props)) => props,
-                _ => continue,
-            };
-
-            let name_match = props
-                .local_name
-                .as_deref()
-                .map(|n| n.starts_with(&target_name))
-                .unwrap_or(false);
-
-            if !name_match {
-                continue;
-            }
-
-            // Optional address filter
-            if let Some(addr) = &target_address {
-                if props.address.to_string() != *addr {
+            loop {
+                if !self.shared.running.load(Ordering::Relaxed) {
+                    adapter.stop_scan().await.ok();
+                    return Ok(());
+                }
+                let event = match tokio::time::timeout(Duration::from_secs(30), events.next()).await
+                {
+                    Ok(Some(e)) => e,
+                    Ok(None) => {
+                        adapter.stop_scan().await.ok();
+                        return Err("BLE event stream ended".to_string());
+                    }
+                    Err(_) => {
+                        adapter.stop_scan().await.ok();
+                        return Err("BLE scan timeout (30 s)".to_string());
+                    }
+                };
+                let id = match event {
+                    CentralEvent::DeviceDiscovered(id) | CentralEvent::DeviceUpdated(id) => id,
+                    _ => continue,
+                };
+                let p = match adapter.peripheral(&id).await {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+                let props = match p.properties().await {
+                    Ok(Some(props)) => props,
+                    _ => continue,
+                };
+                let name_match = props
+                    .local_name
+                    .as_deref()
+                    .map(|n| n.starts_with(&target_name))
+                    .unwrap_or(false);
+                if !name_match {
                     continue;
                 }
+                if let Some(ref addr) = target_address {
+                    if props.address.to_string() != *addr {
+                        continue;
+                    }
+                }
+                eprintln!(
+                    "[{}] BLE found '{}'",
+                    self.config.name,
+                    props.local_name.as_deref().unwrap_or("?")
+                );
+                break p;
             }
-
-            eprintln!(
-                "[{}] BLE found '{}'",
-                self.config.name,
-                props.local_name.as_deref().unwrap_or("?")
-            );
-            break p;
+            // `events` dropped here — releases D-Bus event subscriptions
         };
 
         adapter.stop_scan().await.ok();
+        // Brief pause after StopDiscovery before connecting
+        sleep(Duration::from_millis(500)).await;
 
-        // \u2500\u2500 3. Connect and discover services \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // ── 3. Connect (robust polling) ─────────────────────────────────────────
+        //
+        // btleplug on Linux/BlueZ can return Err("Timeout waiting for reply")
+        // while the BLE connection is still being negotiated in the background.
+        // Similarly, a stale BlueZ state from a previous run can produce
+        // "Operation already in progress" or "Already connected".
+        //
+        // In all these cases the device MAY still finish connecting.  We therefore
+        // spawn connect() as a background task and use is_connected() polling as the
+        // definitive success indicator — mirroring the strategy used by bleak (Python).
         eprintln!("[{}] BLE connecting...", self.config.name);
-        peripheral.connect().await.map_err(|e| e.to_string())?;
+
+        // If the device is already connected in BlueZ (e.g. from a previous
+        // stalled attempt that was never cleaned up) we skip the connect() call
+        // entirely and go straight to service discovery.
+        let already_connected = peripheral.is_connected().await.unwrap_or(false);
+
+        if !already_connected {
+            let p_connect = peripheral.clone();
+            let connect_task = tokio::spawn(async move { p_connect.connect().await });
+
+            // Poll is_connected() as the authoritative connection signal.
+            // The connect_task runs concurrently; its result is advisory only.
+            // We exit the loop only via `break` (connected) or `return` (timeout/stop).
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(40);
+            loop {
+                if !self.shared.running.load(Ordering::Relaxed) {
+                    connect_task.abort();
+                    return Ok(());
+                }
+
+                match peripheral.is_connected().await {
+                    Ok(true) => break,
+                    Ok(false) => {}
+                    Err(e) => {
+                        eprintln!("[{}] BLE is_connected probe: {e}", self.config.name);
+                    }
+                }
+
+                if tokio::time::Instant::now() >= deadline {
+                    connect_task.abort();
+                    // Explicit disconnect so BlueZ doesn't keep a stale pending attempt.
+                    peripheral.disconnect().await.ok();
+                    return Err("BLE connection timeout (40 s)".to_string());
+                }
+
+                sleep(Duration::from_millis(500)).await;
+            }
+
+            connect_task.abort();
+        } else {
+            eprintln!("[{}] BLE already connected, reusing link", self.config.name);
+        }
+
+        // Settle before service discovery — give the GATT layer time to initialise.
+        sleep(Duration::from_millis(700)).await;
         peripheral
             .discover_services()
             .await
@@ -162,11 +221,7 @@ impl X714 {
         let (write_tx, mut write_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
         *self.shared.ble_write_tx.lock().await = Some(write_tx);
 
-        self.on_connected().await;
-
-        // \u2500\u2500 7. Spawn tasks \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
-        // Receive: notification stream → on_receive
+        // Spawn receive task early so device responses during setup are captured immediately.
         let recv_self = self.clone();
         let mut recv_task = tokio::spawn(async move {
             while let Some(notif) = notif_stream.next().await {
@@ -181,15 +236,24 @@ impl X714 {
             }
         });
 
-        // Write: mpsc receiver → RX characteristic
+        // CRITICAL: spawn write task BEFORE on_connected().
+        // Without this, config_reader() queues all commands in the unbounded channel while
+        // no consumer exists. The write task then receives them all at once and flushes
+        // them back-to-back, causing "Operation already in progress" on the BLE adapter.
+        // The 200 ms inter-write delay keeps BLE writes within the adapter's rate limit.
         let p_write = peripheral.clone();
         let mut write_task = tokio::spawn(async move {
             while let Some(data) = write_rx.recv().await {
                 let _ = p_write
                     .write(&rx_char, &data, WriteType::WithoutResponse)
                     .await;
+                sleep(Duration::from_millis(200)).await;
             }
         });
+
+        self.on_connected().await;
+
+        // \u2500\u2500 7. Spawn tasks \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
         // Ping: keep connection alive every 5 s
         let ping_self = self.clone();

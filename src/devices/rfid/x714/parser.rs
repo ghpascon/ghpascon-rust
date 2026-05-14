@@ -8,11 +8,13 @@ pub fn parse_line_to_events(input: &str) -> Vec<X714Event> {
         .replace('\r', "")
         .replace('\n', "")
         .to_lowercase();
-    if data.is_empty() {
+    if data.is_empty() || data == "#pong" {
         return Vec::new();
     }
 
-    if data.starts_with("#read:") {
+    // #read:on/off — acknowledgement from the device that reading started/stopped.
+    // #start_reading:on/off — device echoes the config command back; treat as the same event.
+    if data.starts_with("#read:") || data.starts_with("#start_reading:") {
         let on = data.ends_with("on");
         return vec![X714Event::Reading(on)];
     }

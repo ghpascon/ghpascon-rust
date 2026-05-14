@@ -1,5 +1,5 @@
-use std::collections::VecDeque;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -134,7 +134,10 @@ impl SatoPrinter {
                             line.clear();
                             match buf_reader.read_line(&mut line).await {
                                 Ok(0) => {
-                                    recv_self.shared.is_connected.store(false, Ordering::Relaxed);
+                                    recv_self
+                                        .shared
+                                        .is_connected
+                                        .store(false, Ordering::Relaxed);
                                     break;
                                 }
                                 Ok(_) => {
@@ -149,7 +152,10 @@ impl SatoPrinter {
                                     }
                                 }
                                 Err(_) => {
-                                    recv_self.shared.is_connected.store(false, Ordering::Relaxed);
+                                    recv_self
+                                        .shared
+                                        .is_connected
+                                        .store(false, Ordering::Relaxed);
                                     break;
                                 }
                             }

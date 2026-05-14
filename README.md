@@ -377,14 +377,14 @@ from `.json` config files. Inspired by the Python `DeviceManager`.
 The `"reader"` field determines the device type. All other fields are optional — each device's
 defaults are applied automatically. The filename (without `.json`) becomes the device `name`.
 
-| Type            | `"reader"` field            |
-| --------------- | --------------------------- |
-| X714            | `"X714"`                    |
-| Impinj R700     | `"R700_IOT"`                |
-| Generic Serial  | `"SERIAL"`                  |
-| Generic TCP     | `"TCP"`                     |
-| SATO printer    | `"SATO"`                    |
-| SATO WS4        | `"SATO_WS4"`                |
+| Type           | `"reader"` field |
+| -------------- | ---------------- |
+| X714           | `"X714"`         |
+| Impinj R700    | `"R700_IOT"`     |
+| Generic Serial | `"SERIAL"`       |
+| Generic TCP    | `"TCP"`          |
+| SATO printer   | `"SATO"`         |
+| SATO WS4       | `"SATO_WS4"`     |
 
 ```json
 { "reader": "X714", "connection_type": "TCP", "ip": "192.168.1.50" }
@@ -397,20 +397,20 @@ defaults are applied automatically. The filename (without `.json`) becomes the d
 
 #### DeviceInfo
 
-| Field                 | Type                      | Description                                           |
-| --------------------- | ------------------------- | ----------------------------------------------------- |
-| `name`                | `String`                  | Device name (from filename)                           |
-| `device_type`         | `String`                  | e.g. `"X714"`, `"R700_IOT"`, `"SATO"`                 |
-| `device_class`        | `String`                  | Rust runtime class name                               |
-| `is_connected`        | `bool`                    | Current connection state                              |
-| `is_reading`          | `bool`                    | Current reading/inventory state                       |
-| `is_gpi_trigger_on`   | `bool`                    | `true` when the reader is configured to use GPI start |
-| `can_print`           | `bool`                    | `true` when the device can accept print jobs          |
-| `to_print`            | `usize`                   | Number of queued print jobs                           |
-| `has_serial_number`   | `bool`                    | `true` when a connected device exposed a serial       |
-| `serial_number`       | `String`                  | Serial number or `"Unknown"`                          |
-| `connect_instruction` | `String`                  | Human-readable connection string                      |
-| `current_config`      | `HashMap<String, Value>`  | Current effective device config                       |
+| Field                 | Type                     | Description                                           |
+| --------------------- | ------------------------ | ----------------------------------------------------- |
+| `name`                | `String`                 | Device name (from filename)                           |
+| `device_type`         | `String`                 | e.g. `"X714"`, `"R700_IOT"`, `"SATO"`                 |
+| `device_class`        | `String`                 | Rust runtime class name                               |
+| `is_connected`        | `bool`                   | Current connection state                              |
+| `is_reading`          | `bool`                   | Current reading/inventory state                       |
+| `is_gpi_trigger_on`   | `bool`                   | `true` when the reader is configured to use GPI start |
+| `can_print`           | `bool`                   | `true` when the device can accept print jobs          |
+| `to_print`            | `usize`                  | Number of queued print jobs                           |
+| `has_serial_number`   | `bool`                   | `true` when a connected device exposed a serial       |
+| `serial_number`       | `String`                 | Serial number or `"Unknown"`                          |
+| `connect_instruction` | `String`                 | Human-readable connection string                      |
+| `current_config`      | `HashMap<String, Value>` | Current effective device config                       |
 
 #### DeviceManager API
 
@@ -534,21 +534,21 @@ Uses `Arc<SatoShared>` — `SatoPrinter: Clone` is cheap.
 
 #### Main API
 
-| Method                              | Description                                              |
-| ----------------------------------- | -------------------------------------------------------- |
-| `SatoPrinter::new(config)`          | Create from `SatoConfig`                                 |
-| `SatoPrinter::from_map(params)`     | Create from `HashMap<String, Value>` (infallible)        |
-| `SatoPrinter::default()`            | Default config (192.168.1.100:9100)                      |
-| `SatoWs4Printer::default()`         | Default config (192.168.1.102:9100)                      |
-| `connect().await`                   | Run reconnection loop forever (spawn as background task) |
-| `close().await`                     | Stop loop and release resources                          |
-| `print(zpl).await`                  | Print ZPL bytes; returns `Result<print_id, error>`       |
-| `add_to_print_queue(labels).await`  | Enqueue labels; auto-starts once connected               |
-| `process_queue().await`             | Print all queued labels one by one                       |
-| `is_connected()`                    | Runtime state accessor                                   |
-| `can_print()`                       | `true` when the printer is connected                     |
-| `pending_print_jobs()`              | Number of queued labels                                  |
-| `connect_instruction()`             | Human-readable connection string                         |
+| Method                             | Description                                              |
+| ---------------------------------- | -------------------------------------------------------- |
+| `SatoPrinter::new(config)`         | Create from `SatoConfig`                                 |
+| `SatoPrinter::from_map(params)`    | Create from `HashMap<String, Value>` (infallible)        |
+| `SatoPrinter::default()`           | Default config (192.168.1.100:9100)                      |
+| `SatoWs4Printer::default()`        | Default config (192.168.1.102:9100)                      |
+| `connect().await`                  | Run reconnection loop forever (spawn as background task) |
+| `close().await`                    | Stop loop and release resources                          |
+| `print(zpl).await`                 | Print ZPL bytes; returns `Result<print_id, error>`       |
+| `add_to_print_queue(labels).await` | Enqueue labels; auto-starts once connected               |
+| `process_queue().await`            | Print all queued labels one by one                       |
+| `is_connected()`                   | Runtime state accessor                                   |
+| `can_print()`                      | `true` when the printer is connected                     |
+| `pending_print_jobs()`             | Number of queued labels                                  |
+| `connect_instruction()`            | Human-readable connection string                         |
 
 #### ZPL utilities
 
@@ -591,16 +591,22 @@ cargo run --example sato_ws4
 
 # DeviceManager
 cargo run --example device_manager_example
+
+# Interactive flow:
+# 1) Shows all built-in device variants (`X714_*`, `R700_*`, `SERIAL*`, `TCP*`, `SATO*`)
+# 2) Prompts every config key with default value (Enter keeps default)
+# 3) Writes the selected config to a temporary directory
+# 4) Connects via `DeviceManager`, prints events, and stores tag events in `TagList`
 ```
 
 ## Device config examples
 
 Files in `examples/devices/configs/` show sample configs used by the examples:
 
-| File               | Type           | Transport                    |
-| ------------------ | -------------- | ---------------------------- |
-| `serial_x714.json` | X714           | Serial (VID/PID auto-detect) |
-| `dock_r700.json`   | R700 IOT       | HTTPS REST                   |
+| File               | Type     | Transport                    |
+| ------------------ | -------- | ---------------------------- |
+| `serial_x714.json` | X714     | Serial (VID/PID auto-detect) |
+| `dock_r700.json`   | R700 IOT | HTTPS REST                   |
 
 The `DeviceManager` also exposes built-in example maps via:
 
@@ -628,20 +634,20 @@ The `DeviceManager` also exposes built-in example maps via:
 
 ## Dependencies
 
-| Crate          | Purpose                                             |
-| -------------- | --------------------------------------------------- |
-| `regex`        | Hex validation                                      |
-| `dashmap`      | Concurrent hash maps (TagList)                      |
-| `tokio`        | Async runtime                                       |
-| `sha2`         | SHA-256 hashing                                     |
-| `hex`          | Hex encoding/decoding                               |
-| `chrono`       | Timestamps (serde feature enabled)                  |
-| `serde`        | Serialisation/deserialisation                       |
-| `serde_json`   | JSON output                                         |
-| `serialport`   | Serial port enumeration (X714 VID/PID detect)       |
-| `tokio-serial` | Async serial I/O (X714, SerialDevice)               |
-| `reqwest`      | HTTPS REST client with stream support (R700)        |
-| `uuid`         | Print job IDs (SatoPrinter)                         |
+| Crate          | Purpose                                       |
+| -------------- | --------------------------------------------- |
+| `regex`        | Hex validation                                |
+| `dashmap`      | Concurrent hash maps (TagList)                |
+| `tokio`        | Async runtime                                 |
+| `sha2`         | SHA-256 hashing                               |
+| `hex`          | Hex encoding/decoding                         |
+| `chrono`       | Timestamps (serde feature enabled)            |
+| `serde`        | Serialisation/deserialisation                 |
+| `serde_json`   | JSON output                                   |
+| `serialport`   | Serial port enumeration (X714 VID/PID detect) |
+| `tokio-serial` | Async serial I/O (X714, SerialDevice)         |
+| `reqwest`      | HTTPS REST client with stream support (R700)  |
+| `uuid`         | Print job IDs (SatoPrinter)                   |
 
 ## License
 

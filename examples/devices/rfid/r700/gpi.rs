@@ -1,3 +1,4 @@
+use ghpascon_rust::devices::rfid::r700::R700;
 /// Example: R700 with GPI triggers for inventory start/stop.
 ///
 /// Run:
@@ -6,7 +7,6 @@
 ///   cargo run --example r700_gpi
 /// (defaults to 192.168.1.101)
 use ghpascon_rust::devices::rfid::r700::config_example::r700_iot_gpi_map;
-use ghpascon_rust::devices::rfid::r700::R700;
 use serde_json::Value;
 
 #[tokio::main]

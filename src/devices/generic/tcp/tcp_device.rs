@@ -115,7 +115,10 @@ impl TcpDevice {
                             line.clear();
                             match buf_reader.read_line(&mut line).await {
                                 Ok(0) => {
-                                    recv_self.shared.is_connected.store(false, Ordering::Relaxed);
+                                    recv_self
+                                        .shared
+                                        .is_connected
+                                        .store(false, Ordering::Relaxed);
                                     break;
                                 }
                                 Ok(_) => {
@@ -125,7 +128,10 @@ impl TcpDevice {
                                     }
                                 }
                                 Err(_) => {
-                                    recv_self.shared.is_connected.store(false, Ordering::Relaxed);
+                                    recv_self
+                                        .shared
+                                        .is_connected
+                                        .store(false, Ordering::Relaxed);
                                     break;
                                 }
                             }

@@ -4,37 +4,67 @@
 //! The `"reader"` field determines the type.
 //! All other fields are optional — defaults are applied automatically.
 
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use serde_json::Value;
 use tokio::task::JoinHandle;
 
-use super::rfid::r700::R700;
-use super::rfid::x714::X714;
 use super::generic::serial::SerialDevice;
 use super::generic::tcp::TcpDevice;
 use super::printer::sato::{SatoPrinter, SatoWs4Printer};
+use super::rfid::r700::R700;
+use super::rfid::x714::X714;
 
 pub type EventHandler = dyn FnMut(&str, &str, Option<Value>) + Send + 'static;
 pub type SharedEventHandler = Arc<Mutex<Box<EventHandler>>>;
 
 static CONFIG_EXAMPLES: &[(&str, fn() -> HashMap<String, Value>)] = &[
-    ("X714_DEFAULT", || super::rfid::x714::config_example::x714_default_map()),
-    ("X714_SERIAL", || super::rfid::x714::config_example::x714_map()),
-    ("X714_TCP", || super::rfid::x714::config_example::x714_tcp_map()),
-    ("X714_BLE", || super::rfid::x714::config_example::x714_ble_map()),
-    ("X714_ALL", || super::rfid::x714::config_example::x714_all_map()),
-    ("R700_IOT", || super::rfid::r700::config_example::r700_iot_map()),
-    ("R700_IOT_DICT", || super::rfid::r700::config_example::r700_iot_dict_map()),
-    ("R700_IOT_GPI", || super::rfid::r700::config_example::r700_iot_gpi_map()),
-    ("R700_PROTECTED_INVENTORY", || super::rfid::r700::config_example::r700_protected_inventory_map()),
-    ("SERIAL", || super::generic::serial::config_example::serial_default_map()),
-    ("SERIAL_CUSTOM", || super::generic::serial::config_example::serial_custom_map()),
-    ("TCP", || super::generic::tcp::config_example::tcp_default_map()),
-    ("TCP_CUSTOM", || super::generic::tcp::config_example::tcp_custom_map()),
-    ("SATO", || super::printer::sato::config_example::sato_default_map()),
-    ("SATO_WS4", || super::printer::sato::config_example::sato_ws4_map()),
+    ("X714_DEFAULT", || {
+        super::rfid::x714::config_example::x714_default_map()
+    }),
+    ("X714_SERIAL", || {
+        super::rfid::x714::config_example::x714_map()
+    }),
+    ("X714_TCP", || {
+        super::rfid::x714::config_example::x714_tcp_map()
+    }),
+    ("X714_BLE", || {
+        super::rfid::x714::config_example::x714_ble_map()
+    }),
+    ("X714_ALL", || {
+        super::rfid::x714::config_example::x714_all_map()
+    }),
+    ("R700_IOT", || {
+        super::rfid::r700::config_example::r700_iot_map()
+    }),
+    ("R700_IOT_DICT", || {
+        super::rfid::r700::config_example::r700_iot_dict_map()
+    }),
+    ("R700_IOT_GPI", || {
+        super::rfid::r700::config_example::r700_iot_gpi_map()
+    }),
+    ("R700_PROTECTED_INVENTORY", || {
+        super::rfid::r700::config_example::r700_protected_inventory_map()
+    }),
+    ("SERIAL", || {
+        super::generic::serial::config_example::serial_default_map()
+    }),
+    ("SERIAL_CUSTOM", || {
+        super::generic::serial::config_example::serial_custom_map()
+    }),
+    ("TCP", || {
+        super::generic::tcp::config_example::tcp_default_map()
+    }),
+    ("TCP_CUSTOM", || {
+        super::generic::tcp::config_example::tcp_custom_map()
+    }),
+    ("SATO", || {
+        super::printer::sato::config_example::sato_default_map()
+    }),
+    ("SATO_WS4", || {
+        super::printer::sato::config_example::sato_ws4_map()
+    }),
 ];
 
 pub enum Device {
@@ -229,13 +259,25 @@ impl Device {
         password: &str,
     ) -> Result<(), String> {
         match self {
-            Self::X714(d) => d.write_epc(target_identifier, target_value, new_epc, password).await,
-            Self::R700(d) => d.write_epc(target_identifier, target_value, new_epc, password).await,
+            Self::X714(d) => {
+                d.write_epc(target_identifier, target_value, new_epc, password)
+                    .await
+            }
+            Self::R700(d) => {
+                d.write_epc(target_identifier, target_value, new_epc, password)
+                    .await
+            }
             _ => Err("device type does not support this operation".to_string()),
         }
     }
 
-    pub async fn write_gpo(&self, pin: u8, state: bool, control: &str, time_ms: u64) -> Result<(), String> {
+    pub async fn write_gpo(
+        &self,
+        pin: u8,
+        state: bool,
+        control: &str,
+        time_ms: u64,
+    ) -> Result<(), String> {
         match self {
             Self::X714(d) => d.write_gpo(pin, state, control, time_ms).await,
             Self::R700(d) => d.write_gpo(pin, state, control, time_ms as u32).await,
@@ -295,7 +337,10 @@ impl DeviceManager {
             match std::fs::create_dir_all(&self.devices_path) {
                 Ok(_) => eprintln!("📁 Directory created: {}", self.devices_path.display()),
                 Err(e) => {
-                    eprintln!("❌ Could not create directory '{}': {e}", self.devices_path.display());
+                    eprintln!(
+                        "❌ Could not create directory '{}': {e}",
+                        self.devices_path.display()
+                    );
                     return;
                 }
             }
@@ -315,26 +360,42 @@ impl DeviceManager {
                 continue;
             }
 
-            let filename = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let filename = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
             let name = filename.trim_end_matches(".json").to_string();
 
             eprintln!("📄 Reading '{}'…", filename);
 
             let content = match std::fs::read_to_string(&path) {
                 Ok(s) => s,
-                Err(e) => { eprintln!("❌ Error reading '{}': {e}", filename); continue; }
+                Err(e) => {
+                    eprintln!("❌ Error reading '{}': {e}", filename);
+                    continue;
+                }
             };
 
             let raw: HashMap<String, Value> = match serde_json::from_str(&content) {
                 Ok(d) => d,
-                Err(e) => { eprintln!("❌ Invalid JSON in '{}': {e}", filename); continue; }
+                Err(e) => {
+                    eprintln!("❌ Invalid JSON in '{}': {e}", filename);
+                    continue;
+                }
             };
 
-            let data: HashMap<String, Value> = raw.into_iter().map(|(k, v)| (k.to_lowercase(), v)).collect();
+            let data: HashMap<String, Value> = raw
+                .into_iter()
+                .map(|(k, v)| (k.to_lowercase(), v))
+                .collect();
 
             let reader_type = match data.get("reader").and_then(|v| v.as_str()) {
                 Some(t) => t.to_string(),
-                None => { eprintln!("⚠️  '{}' has no 'reader' field — skipped", filename); continue; }
+                None => {
+                    eprintln!("⚠️  '{}' has no 'reader' field — skipped", filename);
+                    continue;
+                }
             };
 
             self.add_device(&name, &reader_type, data);
@@ -349,49 +410,64 @@ impl DeviceManager {
 
         match device_type.to_uppercase().as_str() {
             "X714" => match X714::from_map(data) {
-                Ok(d) => { eprintln!("  ✅ X714 '{}' → {}", name, d.connect_instruction()); self.devices.push(Device::X714(d)); }
+                Ok(d) => {
+                    eprintln!("  ✅ X714 '{}' → {}", name, d.connect_instruction());
+                    self.devices.push(Device::X714(d));
+                }
                 Err(e) => eprintln!("  ❌ X714 '{}' config error: {e}", name),
             },
             "R700_IOT" | "R700" => match R700::from_map(data) {
-                Ok(d) => { eprintln!("  ✅ R700 '{}' → {}", name, d.connect_instruction()); self.devices.push(Device::R700(d)); }
+                Ok(d) => {
+                    eprintln!("  ✅ R700 '{}' → {}", name, d.connect_instruction());
+                    self.devices.push(Device::R700(d));
+                }
                 Err(e) => eprintln!("  ❌ R700 '{}' config error: {e}", name),
             },
             "SERIAL" => {
                 let d = SerialDevice::from_map(data);
                 eprintln!("  ✅ SERIAL '{}' → {}", name, d.connect_instruction());
                 self.devices.push(Device::Serial(d));
-            },
+            }
             "TCP" => {
                 let d = TcpDevice::from_map(data);
                 eprintln!("  ✅ TCP '{}' → {}", name, d.connect_instruction());
                 self.devices.push(Device::Tcp(d));
-            },
+            }
             "SATO" => {
                 let d = SatoPrinter::from_map(data);
                 eprintln!("  ✅ SATO '{}' → {}", name, d.connect_instruction());
                 self.devices.push(Device::Sato(d));
-            },
+            }
             "SATO_WS4" => {
                 let d = SatoWs4Printer::from_map(data);
                 eprintln!("  ✅ SATO_WS4 '{}' → {}", name, d.connect_instruction());
                 self.devices.push(Device::SatoWs4(d));
-            },
+            }
             other => eprintln!("  ⚠️  Unknown type '{}' for '{}' — skipped", other, name),
         }
     }
 
     pub fn assign_event_handler(&mut self) {
-        let Some(handler) = &self.event_handler else { return; };
+        let Some(handler) = &self.event_handler else {
+            return;
+        };
         for device in &mut self.devices {
             device.set_event_handler(Arc::clone(handler));
         }
     }
 
     pub async fn connect_devices(&mut self, force: bool) {
-        let active = self.connect_tasks.iter().filter(|t| !t.is_finished()).count();
+        let active = self
+            .connect_tasks
+            .iter()
+            .filter(|t| !t.is_finished())
+            .count();
 
         if active > 0 && !force {
-            eprintln!("ℹ️  {} active connection task(s) — use force=true to restart", active);
+            eprintln!(
+                "ℹ️  {} active connection task(s) — use force=true to restart",
+                active
+            );
             return;
         }
 
@@ -429,8 +505,12 @@ impl DeviceManager {
         self.devices.clear();
     }
 
-    pub fn len(&self) -> usize { self.devices.len() }
-    pub fn is_empty(&self) -> bool { self.devices.is_empty() }
+    pub fn len(&self) -> usize {
+        self.devices.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.devices.is_empty()
+    }
 
     pub fn get_device_names(&self) -> Vec<String> {
         self.devices.iter().map(|d| d.name().to_string()).collect()
@@ -446,7 +526,10 @@ impl DeviceManager {
 
     pub fn get_device_info(&self, name: Option<&str>) -> Vec<DeviceInfo> {
         match name {
-            Some(n) => self.get_device(n).map(|d| vec![Self::build_info(d)]).unwrap_or_default(),
+            Some(n) => self
+                .get_device(n)
+                .map(|d| vec![Self::build_info(d)])
+                .unwrap_or_default(),
             None => self.devices.iter().map(Self::build_info).collect(),
         }
     }
@@ -471,12 +554,16 @@ impl DeviceManager {
     }
 
     pub fn any_device_reading(&self) -> bool {
-        self.devices.iter().any(|d| d.is_connected() && d.is_reading())
+        self.devices
+            .iter()
+            .any(|d| d.is_connected() && d.is_reading())
     }
 
     pub fn get_serial_number(&self, name: &str) -> Option<String> {
         let d = self.get_device(name)?;
-        if !d.is_connected() { return None; }
+        if !d.is_connected() {
+            return None;
+        }
         d.serial_number()
     }
 
@@ -492,15 +579,29 @@ impl DeviceManager {
     }
 
     pub async fn start_inventory(&self, name: &str) -> Result<(), String> {
-        let d = self.get_device(name).ok_or_else(|| format!("device '{}' not found", name))?;
-        if !d.is_connected() { return Err(format!("device '{}' is not connected", name)); }
-        d.start_inventory().await.map_err(|e| { eprintln!("❌ start_inventory '{}': {e}", name); e })
+        let d = self
+            .get_device(name)
+            .ok_or_else(|| format!("device '{}' not found", name))?;
+        if !d.is_connected() {
+            return Err(format!("device '{}' is not connected", name));
+        }
+        d.start_inventory().await.map_err(|e| {
+            eprintln!("❌ start_inventory '{}': {e}", name);
+            e
+        })
     }
 
     pub async fn stop_inventory(&self, name: &str) -> Result<(), String> {
-        let d = self.get_device(name).ok_or_else(|| format!("device '{}' not found", name))?;
-        if !d.is_connected() { return Err(format!("device '{}' is not connected", name)); }
-        d.stop_inventory().await.map_err(|e| { eprintln!("❌ stop_inventory '{}': {e}", name); e })
+        let d = self
+            .get_device(name)
+            .ok_or_else(|| format!("device '{}' not found", name))?;
+        if !d.is_connected() {
+            return Err(format!("device '{}' is not connected", name));
+        }
+        d.stop_inventory().await.map_err(|e| {
+            eprintln!("❌ stop_inventory '{}': {e}", name);
+            e
+        })
     }
 
     pub async fn start_inventory_all(&self) -> HashMap<String, bool> {
@@ -525,15 +626,38 @@ impl DeviceManager {
         results
     }
 
-    pub async fn write_epc(&self, name: &str, target_identifier: Option<&str>, target_value: Option<&str>, new_epc: &str, password: &str) -> Result<(), String> {
-        let d = self.get_device(name).ok_or_else(|| format!("device '{}' not found", name))?;
-        if !d.is_connected() { return Err(format!("device '{}' is not connected", name)); }
-        d.write_epc(target_identifier, target_value, new_epc, password).await
+    pub async fn write_epc(
+        &self,
+        name: &str,
+        target_identifier: Option<&str>,
+        target_value: Option<&str>,
+        new_epc: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        let d = self
+            .get_device(name)
+            .ok_or_else(|| format!("device '{}' not found", name))?;
+        if !d.is_connected() {
+            return Err(format!("device '{}' is not connected", name));
+        }
+        d.write_epc(target_identifier, target_value, new_epc, password)
+            .await
     }
 
-    pub async fn write_gpo(&self, name: &str, pin: u8, state: bool, control: &str, time_ms: u64) -> Result<(), String> {
-        let d = self.get_device(name).ok_or_else(|| format!("device '{}' not found", name))?;
-        if !d.is_connected() { return Err(format!("device '{}' is not connected", name)); }
+    pub async fn write_gpo(
+        &self,
+        name: &str,
+        pin: u8,
+        state: bool,
+        control: &str,
+        time_ms: u64,
+    ) -> Result<(), String> {
+        let d = self
+            .get_device(name)
+            .ok_or_else(|| format!("device '{}' not found", name))?;
+        if !d.is_connected() {
+            return Err(format!("device '{}' is not connected", name));
+        }
         d.write_gpo(pin, state, control, time_ms).await
     }
 
@@ -542,7 +666,8 @@ impl DeviceManager {
     }
 
     pub fn get_config_example(name: &str) -> Option<HashMap<String, Value>> {
-        CONFIG_EXAMPLES.iter()
+        CONFIG_EXAMPLES
+            .iter()
             .find(|(n, _)| n.eq_ignore_ascii_case(name))
             .map(|(_, f)| f())
     }
@@ -561,7 +686,10 @@ mod tests {
             "X714",
             HashMap::from([
                 ("reader".to_string(), Value::String("X714".to_string())),
-                ("connection_type".to_string(), Value::String("TCP".to_string())),
+                (
+                    "connection_type".to_string(),
+                    Value::String("TCP".to_string()),
+                ),
                 ("ip".to_string(), Value::String("192.168.1.50".to_string())),
                 ("tcp_port".to_string(), json!(23)),
                 ("gpi_start".to_string(), Value::Bool(true)),
@@ -585,7 +713,9 @@ mod tests {
         assert!(!info.has_serial_number);
         assert_eq!(info.serial_number, "Unknown");
         assert_eq!(
-            info.current_config.get("connection_type").and_then(Value::as_str),
+            info.current_config
+                .get("connection_type")
+                .and_then(Value::as_str),
             Some("TCP")
         );
     }
