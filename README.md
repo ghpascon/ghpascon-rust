@@ -645,9 +645,22 @@ The `DeviceManager` also exposes built-in example maps via:
 
 ## Scripts
 
-| Script              | Description                    |
-| ------------------- | ------------------------------ |
-| `scripts/deploy.sh` | Runs tests, commits and pushes |
+| Script                                    | Description                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------- |
+| `scripts/deploy.sh`                       | Runs tests, commits and pushes                                      |
+| `scripts/build_device_manager_example.sh` | Builds Linux and Windows (x86_64 GNU) release binaries for examples |
+
+Build Linux + Windows artifacts for `device_manager_example`:
+
+```bash
+./scripts/build_device_manager_example.sh
+```
+
+Build Linux + Windows artifacts for another example name:
+
+```bash
+./scripts/build_device_manager_example.sh x714_basic
+```
 
 ## Dependencies
 

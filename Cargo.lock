@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "ghpascon-rust"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "btleplug",
  "chrono",
