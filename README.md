@@ -171,7 +171,7 @@ Transport status:
 
 | Transport | Status                                                            |
 | --------- | ----------------------------------------------------------------- |
-| TCP       | Full: reconnection loop + receive task + monitor + 10 s ping      |
+| TCP       | Full: reconnection loop + receive task + heartbeat monitor + ping |
 | Serial    | Full: VID/PID auto-detect, `tokio-serial`, reconnection loop      |
 | BLE       | Full: adapter scan, connect timeout, GATT discovery, notify/write |
 
@@ -184,10 +184,16 @@ BLE notes:
 - Characteristic lookup resolves `ble_rx_uuid`/`ble_tx_uuid` and falls back to writable/notify characteristics from the same service when needed.
 - BLE write operations are serialized through an internal channel, include small throttling between writes, and keep a periodic `#ping` health check.
 - Notification handling is line-buffered, so fragmented BLE packets are reassembled before parser dispatch.
-- BLE command frames are sent without forced newline terminators (matching Python BLE behavior), while Serial/TCP keep newline framing.
+- BLE command frames are sent without forced newline terminators (matching Python BLE behavior), while Serial/TCP keep newline framing on write.
 - Notification parsing accepts `\n`, `\r`, or full single-frame notifications without delimiters for better firmware compatibility.
 - BLE notification parser also removes `\0` padding and splits concatenated frames by `#` boundaries (`#frame1#frame2`) before dispatching events.
 - Python X714 BLE (`python_devices/.../X714/ble_protocol.py`) now mirrors the same resilience strategy with explicit connect retries, GATT discovery retries, notify fallback retries, and thread-safe disconnect during shutdown; fixed-address mode can be set via `ble_address` in the Python X714 config.
+
+Stream notes (Serial/TCP):
+
+- Stream receive loop parses raw chunks (not only `\n`-terminated lines), accepting `\n`, `\r`, and mixed delimiters.
+- Stream parser removes `\0` padding and also splits concatenated `#` frames (`#frame1#frame2`) before dispatching events.
+- TCP heartbeat sends `#ping` and uses RX timeout monitoring to reconnect stale sockets.
 
 #### Architecture
 

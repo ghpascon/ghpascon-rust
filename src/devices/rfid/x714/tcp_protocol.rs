@@ -4,7 +4,7 @@ use std::sync::{
 };
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::time::sleep;
 
@@ -113,18 +113,16 @@ impl X714 {
         reader: tokio::net::tcp::OwnedReadHalf,
         last_rx: Arc<AtomicU64>,
     ) {
-        let mut buf_reader = BufReader::new(reader);
-
-        let mut line = String::new();
+        let mut reader = reader;
+        let mut raw = [0u8; 2048];
+        let mut rx_buffer = String::new();
 
         loop {
             if !self.shared.is_connected.load(Ordering::Relaxed) {
                 break;
             }
 
-            line.clear();
-
-            match buf_reader.read_line(&mut line).await {
+            match reader.read(&mut raw).await {
                 Ok(0) => {
                     eprintln!("[{}] TCP EOF", self.config.name);
 
@@ -133,14 +131,10 @@ impl X714 {
                     break;
                 }
 
-                Ok(_) => {
+                Ok(n) => {
                     last_rx.store(Self::now_millis(), Ordering::Relaxed);
-
-                    let trimmed = line.trim();
-
-                    if !trimmed.is_empty() {
-                        self.on_receive(trimmed);
-                    }
+                    let chunk = String::from_utf8_lossy(&raw[..n]);
+                    self.process_incoming_chunk(&chunk, &mut rx_buffer);
                 }
 
                 Err(e) => {
@@ -158,7 +152,7 @@ impl X714 {
     async fn tcp_heartbeat_loop(&self, last_rx: Arc<AtomicU64>) {
         const PING_INTERVAL: Duration = Duration::from_secs(2);
 
-        const CONNECTION_TIMEOUT: Duration = Duration::from_secs(3);
+        const CONNECTION_TIMEOUT: Duration = Duration::from_secs(8);
 
         loop {
             sleep(PING_INTERVAL).await;
@@ -187,7 +181,7 @@ impl X714 {
             // -----------------------------------------------------
             // heartbeat ping
             // -----------------------------------------------------
-            if let Err(e) = self.write("ping").await {
+            if let Err(e) = self.write("#ping").await {
                 eprintln!("[{}] heartbeat write failed: {}", self.config.name, e);
 
                 self.shared.is_connected.store(false, Ordering::Relaxed);

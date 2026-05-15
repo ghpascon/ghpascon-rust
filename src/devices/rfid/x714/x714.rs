@@ -215,6 +215,84 @@ impl X714 {
         }
     }
 
+    /// Process a raw chunk from stream transports (Serial/TCP) and emit complete
+    /// frames as soon as they can be recognized.
+    pub(crate) fn process_incoming_chunk(&self, chunk: &str, buffer: &mut String) {
+        buffer.push_str(chunk);
+        buffer.retain(|c| c != '\0');
+
+        loop {
+            let next_lf = buffer.find('\n');
+            let next_cr = buffer.find('\r');
+            let pos = match (next_lf, next_cr) {
+                (Some(a), Some(b)) => a.min(b),
+                (Some(a), None) => a,
+                (None, Some(b)) => b,
+                (None, None) => break,
+            };
+
+            if pos == 0 {
+                buffer.drain(..=pos);
+                continue;
+            }
+
+            let line: String = buffer.drain(..=pos).collect();
+            let trimmed = line.trim_matches(|c| c == '\r' || c == '\n').trim();
+            if !trimmed.is_empty() {
+                self.on_receive(trimmed);
+            }
+        }
+
+        // Some firmwares concatenate frames without delimiters: "#f1#f2...".
+        loop {
+            let Some(first_hash) = buffer.find('#') else {
+                buffer.clear();
+                break;
+            };
+
+            if first_hash > 0 {
+                buffer.drain(..first_hash);
+            }
+
+            let rest = &buffer[1..];
+            let Some(next_rel) = rest.find('#') else {
+                break;
+            };
+            let split_at = 1 + next_rel;
+
+            let frame = buffer[..split_at].trim();
+            if !frame.is_empty() {
+                self.on_receive(frame);
+            }
+
+            buffer.drain(..split_at);
+        }
+
+        // Also accept full single-frame chunks without CR/LF.
+        let trimmed = buffer.trim();
+        let lower = trimmed.to_lowercase();
+        let looks_complete_tag = if let Some(payload) = lower.strip_prefix("#t+@") {
+            let payload = payload.trim();
+            let simple_hex = !payload.is_empty()
+                && payload.len() >= 8
+                && payload.chars().all(|c| c.is_ascii_hexdigit());
+            payload.contains('|') || simple_hex
+        } else {
+            false
+        };
+        let looks_complete_meta = lower.starts_with("#read:")
+            || lower.starts_with("#start_reading:")
+            || lower.starts_with("#name:")
+            || lower == "#setup_done"
+            || lower == "#tags_cleared"
+            || lower == "#pong";
+
+        if !trimmed.is_empty() && (looks_complete_tag || looks_complete_meta) {
+            self.on_receive(trimmed);
+            buffer.clear();
+        }
+    }
+
     /// Same as `on_receive` but also returns the parsed events (useful for tests/examples).
     pub fn parse_line(&self, input: &str) -> Vec<X714Event> {
         let events = parse_line_to_events(input);
@@ -367,5 +445,28 @@ mod tests {
         assert!(cmds.iter().any(|c| c == "#session:2"));
         assert!(cmds.iter().any(|c| c == "#start_reading:on"));
         assert!(cmds.iter().any(|c| c == "#setup_reader"));
+    }
+
+    #[test]
+    fn process_incoming_chunk_parses_cr_delimited_frames() {
+        let reader = X714::default();
+        let mut buffer = String::new();
+
+        reader.process_incoming_chunk("#read:on\r#name:X714-ABC\r", &mut buffer);
+
+        assert!(reader.is_reading());
+        assert_eq!(reader.serial_number().as_deref(), Some("x714-abc"));
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn process_incoming_chunk_parses_concatenated_hash_frames() {
+        let reader = X714::default();
+        let mut buffer = String::new();
+
+        reader.process_incoming_chunk("#read:on#read:off", &mut buffer);
+
+        assert!(!reader.is_reading());
+        assert!(buffer.is_empty());
     }
 }
