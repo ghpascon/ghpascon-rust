@@ -94,6 +94,36 @@ fn read_line(prompt: &str) -> io::Result<String> {
     Ok(buf.trim().to_string())
 }
 
+fn display_examples(examples: &[String]) {
+    if examples.is_empty() {
+        println!("Nenhum exemplo de configuração disponível.");
+        return;
+    }
+
+    println!("\nConfigurações disponíveis:");
+    let mut last_family = "";
+    for (index, name) in examples.iter().enumerate() {
+        let family = family_of(name);
+        if family != last_family {
+            println!("\n{} variantes:", family);
+            last_family = family;
+        }
+        println!("  {:>2}) {}", index + 1, name);
+    }
+}
+
+fn prompt_user_selection(examples: &[String]) -> io::Result<String> {
+    loop {
+        let input = read_line("\nEscolha uma configuração pelo número: ")?;
+        if let Ok(index) = input.parse::<usize>() {
+            if index > 0 && index <= examples.len() {
+                return Ok(examples[index - 1].clone());
+            }
+        }
+        println!("Entrada inválida. Tente novamente.");
+    }
+}
+
 fn select_example_name() -> io::Result<String> {
     let mut examples: Vec<String> = DeviceManager::get_config_examples()
         .into_iter()
@@ -101,41 +131,16 @@ fn select_example_name() -> io::Result<String> {
         .collect();
     examples.sort();
 
+    display_examples(&examples);
+
     if examples.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            "no built-in config examples available",
+            "Nenhum exemplo de configuração disponível.",
         ));
     }
 
-    println!("\nAvailable device variants:");
-    let mut last_family = "";
-    for (index, name) in examples.iter().enumerate() {
-        let family = family_of(name);
-        if family != last_family {
-            println!("\n{} variants:", family);
-            last_family = family;
-        }
-        println!("  {:>2}) {}", index + 1, name);
-    }
-
-    loop {
-        let answer = read_line("\nSelect a variant by number (Enter = 1): ")?;
-        if answer.is_empty() {
-            return Ok(examples[0].clone());
-        }
-
-        if let Ok(index) = answer.parse::<usize>() {
-            if (1..=examples.len()).contains(&index) {
-                return Ok(examples[index - 1].clone());
-            }
-        }
-
-        println!(
-            "Invalid selection. Type a number between 1 and {}.",
-            examples.len()
-        );
-    }
+    prompt_user_selection(&examples)
 }
 
 fn value_preview(value: &Value) -> String {

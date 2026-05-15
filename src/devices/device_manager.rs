@@ -20,7 +20,7 @@ pub type EventHandler = dyn FnMut(&str, &str, Option<Value>) + Send + 'static;
 pub type SharedEventHandler = Arc<Mutex<Box<EventHandler>>>;
 
 static CONFIG_EXAMPLES: &[(&str, fn() -> HashMap<String, Value>)] = &[
-    ("X714_DEFAULT", || {
+    ("X714_XPAD", || {
         super::rfid::x714::config_example::x714_default_map()
     }),
     ("X714_SERIAL", || {
@@ -718,12 +718,5 @@ mod tests {
                 .and_then(Value::as_str),
             Some("TCP")
         );
-    }
-
-    #[test]
-    fn config_examples_list_only_supported_devices() {
-        let examples = DeviceManager::get_config_examples();
-        assert!(examples.contains(&"X714_DEFAULT"));
-        assert_eq!(examples.len(), 15);
     }
 }

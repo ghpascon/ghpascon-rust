@@ -169,11 +169,25 @@ Built on `Arc<X714Shared>` so `X714: Clone` is cheap – all clones share the sa
 
 Transport status:
 
-| Transport | Status                                                           |
-| --------- | ---------------------------------------------------------------- |
-| TCP       | Full: reconnection loop + receive task + monitor + 10 s ping     |
-| Serial    | Full: VID/PID auto-detect, `tokio-serial`, reconnection loop     |
-| BLE       | Stub: logs "not implemented"; replace body once `btleplug` added |
+| Transport | Status                                                            |
+| --------- | ----------------------------------------------------------------- |
+| TCP       | Full: reconnection loop + receive task + monitor + 10 s ping      |
+| Serial    | Full: VID/PID auto-detect, `tokio-serial`, reconnection loop      |
+| BLE       | Full: adapter scan, connect timeout, GATT discovery, notify/write |
+
+BLE notes:
+
+- BLE transport now uses `btleplug` with explicit scan/connect/discover/subscribe retries and operation-level timeouts.
+- Device matching accepts exact (case-insensitive) name or prefix (`ble_name`).
+- Optional `ble_address` matching is case-insensitive.
+- In auto-discovery mode, candidate selection prioritizes devices advertising the configured `ble_service_uuid` and then best RSSI.
+- Characteristic lookup resolves `ble_rx_uuid`/`ble_tx_uuid` and falls back to writable/notify characteristics from the same service when needed.
+- BLE write operations are serialized through an internal channel, include small throttling between writes, and keep a periodic `#ping` health check.
+- Notification handling is line-buffered, so fragmented BLE packets are reassembled before parser dispatch.
+- BLE command frames are sent without forced newline terminators (matching Python BLE behavior), while Serial/TCP keep newline framing.
+- Notification parsing accepts `\n`, `\r`, or full single-frame notifications without delimiters for better firmware compatibility.
+- BLE notification parser also removes `\0` padding and splits concatenated frames by `#` boundaries (`#frame1#frame2`) before dispatching events.
+- Python X714 BLE (`python_devices/.../X714/ble_protocol.py`) now mirrors the same resilience strategy with explicit connect retries, GATT discovery retries, notify fallback retries, and thread-safe disconnect during shutdown; fixed-address mode can be set via `ble_address` in the Python X714 config.
 
 #### Architecture
 
