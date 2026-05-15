@@ -240,18 +240,20 @@ impl R700 {
         let mask_length = if target_identifier.is_none() { 1 } else { 96 };
 
         let payload = serde_json::json!({
-            "accessCommands": [
-                {"identifier": "1", "blockWrite": {"memoryBank": "epc", "wordOffset": 2, "dataHex": &new_epc[0..8]}},
-                {"identifier": "2", "blockWrite": {"memoryBank": "epc", "wordOffset": 4, "dataHex": &new_epc[8..16]}},
-                {"identifier": "3", "blockWrite": {"memoryBank": "epc", "wordOffset": 6, "dataHex": &new_epc[16..24]}}
-            ],
-            "tagAccessPasswordHex": password,
-            "tagSelectors": [{
-                "action": "include",
-                "tagMemoryBank": identifier_str,
-                "bitOffset": bit_offset,
-                "mask": target_value.unwrap_or("0"),
-                "maskLength": mask_length
+            "accessConfigurations": [{
+                "accessCommands": [
+                    {"identifier": "1", "blockWrite": {"memoryBank": "epc", "wordOffset": 2, "dataHex": &new_epc[0..8]}},
+                    {"identifier": "2", "blockWrite": {"memoryBank": "epc", "wordOffset": 4, "dataHex": &new_epc[8..16]}},
+                    {"identifier": "3", "blockWrite": {"memoryBank": "epc", "wordOffset": 6, "dataHex": &new_epc[16..24]}}
+                ],
+                "tagAccessPasswordHex": password,
+                "tagSelectors": [{
+                    "action": "include",
+                    "tagMemoryBank": identifier_str,
+                    "bitOffset": bit_offset,
+                    "mask": target_value.unwrap_or("0"),
+                    "maskLength": mask_length
+                }]
             }]
         });
 
@@ -357,6 +359,12 @@ mod tests {
             .is_connected
             .store(true, std::sync::atomic::Ordering::Relaxed);
         assert!(clone.is_connected());
+    }
+
+    #[test]
+    fn default_search_mode_matches_python() {
+        let cfg = R700Config::default();
+        assert_eq!(cfg.search_mode, "single-target");
     }
 
     #[test]

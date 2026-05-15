@@ -329,6 +329,16 @@ impl R700 {
             self.on_connected();
             eprintln!("[{}] ✅ Connected", self.config.name);
 
+            // 6.1 Clear GPO states after connect (Python parity)
+            for pin in 1..=3 {
+                if let Err(err) = self.write_gpo(pin, false, "static", 1000).await {
+                    eprintln!(
+                        "[{}] ⚠️ Failed to clear GPO {}: {}",
+                        self.config.name, pin, err
+                    );
+                }
+            }
+
             // 7. Stream events (blocks until stream ends or reader disconnects)
             self.stream_tags().await;
 

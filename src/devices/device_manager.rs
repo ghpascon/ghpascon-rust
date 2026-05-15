@@ -44,6 +44,9 @@ static CONFIG_EXAMPLES: &[(&str, fn() -> HashMap<String, Value>)] = &[
     ("R700_IOT_GPI", || {
         super::rfid::r700::config_example::r700_iot_gpi_map()
     }),
+    ("R700_IOT_FULL", || {
+        super::rfid::r700::config_example::r700_iot_full_map()
+    }),
     ("R700_PROTECTED_INVENTORY", || {
         super::rfid::r700::config_example::r700_protected_inventory_map()
     }),

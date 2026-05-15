@@ -91,6 +91,9 @@ pub struct R700Config {
     pub protected_inventory_password: String,
     pub reconnection_time: u64,
     pub active_ant: Vec<u8>,
+    /// Optional full payload for POST /profiles/inventory/start.
+    /// When set, this takes precedence over the generated config.
+    pub reading_config: Option<Value>,
 }
 
 impl Default for R700Config {
@@ -105,13 +108,14 @@ impl Default for R700Config {
             session: 1,
             read_power: 3000,
             read_rssi: -80,
-            search_mode: "dual-target".to_string(),
+            search_mode: "single-target".to_string(),
             rf_mode: 4,
             gpi_start: false,
             protected_inventory_active: false,
             protected_inventory_password: "12345678".to_string(),
             reconnection_time: 2,
             active_ant: vec![1],
+            reading_config: None,
         }
     }
 }
@@ -119,6 +123,10 @@ impl Default for R700Config {
 impl R700Config {
     /// Build the JSON body sent to `POST /profiles/inventory/start`.
     pub fn build_reading_config(&self) -> Value {
+        if let Some(custom) = &self.reading_config {
+            return custom.clone();
+        }
+
         let antennas: Vec<Value> = self
             .active_ant
             .iter()
@@ -229,6 +237,8 @@ impl R700Config {
         if let Some(Value::String(v)) = params.get("search_mode") {
             if matches!(v.as_str(), "single-target" | "dual-target") {
                 cfg.search_mode = v.clone();
+            } else {
+                cfg.search_mode = "single-target".to_string();
             }
         }
         if let Some(v) = params.get("rf_mode").and_then(|v| v.as_u64()) {
@@ -257,6 +267,10 @@ impl R700Config {
             if cfg.active_ant.is_empty() {
                 cfg.active_ant = vec![1];
             }
+        }
+
+        if let Some(Value::Object(obj)) = params.get("reading_config") {
+            cfg.reading_config = Some(Value::Object(obj.clone()));
         }
 
         Ok(cfg)
@@ -317,6 +331,10 @@ impl R700Config {
                     .map(|&a| Value::Number(Number::from(a)))
                     .collect(),
             ),
+        );
+        map.insert(
+            "reading_config".to_string(),
+            self.reading_config.clone().unwrap_or(Value::Null),
         );
         map
     }

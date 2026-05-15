@@ -299,24 +299,25 @@ Tags are delivered as an NDJSON stream via `GET /data/stream`.
 
 #### R700Config fields
 
-| Field                          | Default           | Description                                     |
-| ------------------------------ | ----------------- | ----------------------------------------------- |
-| `name`                         | `"r700"`          | Device name (appears in event dispatch)         |
-| `ip`                           | `"192.168.1.100"` | Reader IP address                               |
-| `username`                     | `"root"`          | Basic Auth username                             |
-| `password`                     | `"impinj"`        | Basic Auth password                             |
-| `start_reading`                | `true`            | Start inventory on connect                      |
-| `firmware_version`             | `None`            | Required firmware prefix (skip check if `None`) |
-| `session`                      | `1`               | RFID session (0–3)                              |
-| `read_power`                   | `3000`            | Transmit power in cdbm                          |
-| `read_rssi`                    | `-80`             | Minimum RSSI in dBm                             |
-| `search_mode`                  | `"dual-target"`   | Inventory search mode                           |
-| `rf_mode`                      | `4`               | RF mode index                                   |
-| `gpi_start`                    | `false`           | Use GPI triggers                                |
-| `protected_inventory_active`   | `false`           | Enable protected inventory                      |
-| `protected_inventory_password` | `"12345678"`      | Pin hex for protected inventory                 |
-| `reconnection_time`            | `2`               | Seconds between reconnection attempts           |
-| `active_ant`                   | `[1]`             | Active antenna ports                            |
+| Field                          | Default           | Description                                                                       |
+| ------------------------------ | ----------------- | --------------------------------------------------------------------------------- |
+| `name`                         | `"r700"`          | Device name (appears in event dispatch)                                           |
+| `ip`                           | `"192.168.1.100"` | Reader IP address                                                                 |
+| `username`                     | `"root"`          | Basic Auth username                                                               |
+| `password`                     | `"impinj"`        | Basic Auth password                                                               |
+| `start_reading`                | `true`            | Start inventory on connect                                                        |
+| `firmware_version`             | `None`            | Required firmware prefix (skip check if `None`)                                   |
+| `session`                      | `1`               | RFID session (0–3)                                                                |
+| `read_power`                   | `3000`            | Transmit power in cdbm                                                            |
+| `read_rssi`                    | `-80`             | Minimum RSSI in dBm                                                               |
+| `search_mode`                  | `"single-target"` | Inventory search mode                                                             |
+| `rf_mode`                      | `4`               | RF mode index                                                                     |
+| `gpi_start`                    | `false`           | Use GPI triggers                                                                  |
+| `protected_inventory_active`   | `false`           | Enable protected inventory                                                        |
+| `protected_inventory_password` | `"12345678"`      | Pin hex for protected inventory                                                   |
+| `reconnection_time`            | `2`               | Seconds between reconnection attempts                                             |
+| `active_ant`                   | `[1]`             | Active antenna ports                                                              |
+| `reading_config`               | `None`            | Optional full payload for `/profiles/inventory/start`; overrides generated config |
 
 #### R700Event variants
 
@@ -403,6 +404,7 @@ defaults are applied automatically. The filename (without `.json`) becomes the d
 ```json
 { "reader": "X714", "connection_type": "TCP", "ip": "192.168.1.50" }
 { "reader": "R700_IOT", "ip": "192.168.1.101", "active_ant": [1, 2] }
+{ "reader": "R700_IOT", "start_reading": true, "reading_config": { "antennaConfigs": [ { "antennaPort": 1, "inventorySession": 1, "receiveSensitivityDbm": -80, "rfMode": 4, "transmitPowerCdbm": 3300 } ] } }
 { "reader": "SERIAL", "port": "/dev/ttyUSB0" }
 { "reader": "TCP", "ip": "192.168.1.200", "port": 9000 }
 { "reader": "SATO", "ip": "192.168.1.100" }
@@ -632,6 +634,7 @@ The `DeviceManager` also exposes built-in example maps via:
 - `R700_IOT`
 - `R700_IOT_DICT`
 - `R700_IOT_GPI`
+- `R700_IOT_FULL`
 - `R700_PROTECTED_INVENTORY`
 - `SERIAL`
 - `SERIAL_CUSTOM`
